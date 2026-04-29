@@ -46,7 +46,6 @@ export default function TopBar({
             value={globalRps}
             onChange={(e) => setGlobalRps(parseInt(e.target.value))}
             className="w-32 accent-indigo-500 cursor-pointer"
-            disabled={isSimulating}
           />
         </div>
 

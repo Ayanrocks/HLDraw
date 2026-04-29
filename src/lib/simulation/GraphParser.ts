@@ -1,12 +1,12 @@
 import type { ExcalidrawElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
+import type { ComponentCustomData } from "./types";
 
 export interface GraphNode {
   id: string;
   element: ExcalidrawElement;
   incomingEdges: string[]; // IDs of arrow elements
   outgoingEdges: string[]; // IDs of arrow elements
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customData: any;
+  customData: ComponentCustomData;
 }
 
 export interface GraphEdge {
@@ -27,6 +27,7 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
 
   // First pass: Identify all potential nodes (elements that can be bound to)
   for (const el of elements) {
+    if (el.isDeleted) continue;
     if (el.type !== "arrow" && el.type !== "line" && el.type !== "freedraw" && el.type !== "text") {
       nodes.set(el.id, {
         id: el.id,
@@ -40,6 +41,7 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
 
   // Second pass: Process arrows to build edges
   for (const el of elements) {
+    if (el.isDeleted) continue;
     if (el.type === "arrow") {
       const arrow = el as ExcalidrawArrowElement;
       
@@ -66,20 +68,75 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
   return { nodes, edges };
 }
 
-export function validateDAG(graph: Graph): { isValid: boolean; error?: string } {
-  // Cycle detection using Depth First Search
-  const visited = new Set<string>();
-  const recursionStack = new Set<string>();
+export function getTopologicalOrder(graph: Graph): { order: string[]; error?: string; errorNodes?: string[] } {
+  // Kahn's algorithm for Topological Sorting and Cycle Detection
+  const inDegree = new Map<string, number>();
+  const queue: string[] = [];
+  const order: string[] = [];
 
-  for (const [nodeId] of graph.nodes) {
-    if (!visited.has(nodeId)) {
-      if (detectCycle(nodeId, graph, visited, recursionStack)) {
-        return { 
-          isValid: false, 
-          error: "Cyclic flow detected in the architecture. Phase 1 only supports Directed Acyclic Graphs (DAG)." 
-        };
+  // Initialize in-degrees
+  for (const [nodeId, node] of graph.nodes) {
+    inDegree.set(nodeId, node.incomingEdges.length);
+    if (node.incomingEdges.length === 0) {
+      queue.push(nodeId);
+    }
+  }
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    order.push(currentId);
+
+    const node = graph.nodes.get(currentId);
+    if (node) {
+      for (const edgeId of node.outgoingEdges) {
+        const edge = graph.edges.get(edgeId);
+        if (edge) {
+          const targetId = edge.targetId;
+          const currentInDegree = inDegree.get(targetId) || 0;
+          inDegree.set(targetId, currentInDegree - 1);
+          if (currentInDegree - 1 === 0) {
+            queue.push(targetId);
+          }
+        }
       }
     }
+  }
+
+  if (order.length !== graph.nodes.size) {
+    const cyclicNodes = Array.from(inDegree.entries())
+      .filter(([_, degree]) => degree > 0)
+      .map(([id]) => id);
+    return { order: [], error: "Cyclic flow detected in the architecture. Phase 1 only supports Directed Acyclic Graphs (DAG).", errorNodes: cyclicNodes };
+  }
+
+  return { order };
+}
+
+export function validateDAG(graph: Graph): { isValid: boolean; error?: string; topologicalOrder?: string[]; errorNodes?: string[] } {
+  // Check for untyped components first
+  const untypedNodes: string[] = [];
+  for (const [nodeId, node] of graph.nodes) {
+    if (!node.customData.componentType) {
+      untypedNodes.push(nodeId);
+    }
+  }
+
+  if (untypedNodes.length > 0) {
+    return {
+      isValid: false,
+      error: "Some components are missing a type. Please select a type for them.",
+      errorNodes: untypedNodes
+    };
+  }
+
+  const { order, error, errorNodes } = getTopologicalOrder(graph);
+
+  if (error) {
+    return { 
+      isValid: false, 
+      error,
+      errorNodes
+    };
   }
 
   // Check if there's at least one Client node
@@ -98,33 +155,5 @@ export function validateDAG(graph: Graph): { isValid: boolean; error?: string } 
     };
   }
 
-  return { isValid: true };
-}
-
-function detectCycle(
-  nodeId: string, 
-  graph: Graph, 
-  visited: Set<string>, 
-  recursionStack: Set<string>
-): boolean {
-  visited.add(nodeId);
-  recursionStack.add(nodeId);
-
-  const node = graph.nodes.get(nodeId);
-  if (node) {
-    for (const edgeId of node.outgoingEdges) {
-      const edge = graph.edges.get(edgeId);
-      if (edge) {
-        const targetId = edge.targetId;
-        if (!visited.has(targetId) && detectCycle(targetId, graph, visited, recursionStack)) {
-          return true;
-        } else if (recursionStack.has(targetId)) {
-          return true;
-        }
-      }
-    }
-  }
-
-  recursionStack.delete(nodeId);
-  return false;
+  return { isValid: true, topologicalOrder: order };
 }

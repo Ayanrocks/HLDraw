@@ -1,24 +1,31 @@
 import React, { useState } from "react";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
+import type { NodeMetrics } from "@/lib/simulation/SimulationEngine";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ComponentCustomData } from "@/lib/simulation/types";
+
 interface SidebarProps {
   elements: readonly ExcalidrawElement[];
   selectedElements: readonly ExcalidrawElement[];
   setElements: (elements: readonly ExcalidrawElement[]) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  excalidrawAPI: any;
+  excalidrawAPI: ExcalidrawImperativeAPI | null;
+  metrics?: Record<string, NodeMetrics>;
 }
 
-const AWS_INSTANCES: Record<string, { name: string; type: string; rps: number }> = {
-  "t3.micro": { name: "t3.micro", type: "App Server", rps: 100 },
-  "t3.small": { name: "t3.small", type: "App Server", rps: 250 },
-  "m5.large": { name: "m5.large", type: "Web Server", rps: 1500 },
-  "m5.xlarge": { name: "m5.xlarge", type: "Web Server", rps: 3000 },
-  "db.t3.medium": { name: "db.t3.medium", type: "Database", rps: 500 },
-  "db.m5.large": { name: "db.m5.large", type: "Database", rps: 2000 },
-  "cache.t3.micro": { name: "cache.t3.micro", type: "Cache", rps: 5000 },
-  "alb.standard": { name: "alb.standard", type: "Load Balancer", rps: 10000 },
-  "client.default": { name: "client.default", type: "Client", rps: 0 }, // RPS controlled globally
+/**
+ * Maps each component type to its fixed default instance.
+ * No user-selectable dropdown — selecting a type auto-assigns the instance.
+ */
+const DEFAULT_INSTANCE_FOR_TYPE: Record<string, { instanceType: string; instanceName: string; maxCapacity: number }> = {
+  "Web Server": { instanceType: "m5.large", instanceName: "m5.large", maxCapacity: 1500 },
+  "App Server": { instanceType: "t3.medium", instanceName: "t3.medium", maxCapacity: 500 },
+  "DB":         { instanceType: "db.m5.large", instanceName: "db.m5.large", maxCapacity: 2000 },
+  "Cache":      { instanceType: "cache.t3.medium", instanceName: "cache.t3.medium", maxCapacity: 5000 },
+  "ALB":        { instanceType: "alb.standard", instanceName: "ALB Standard", maxCapacity: 10000 },
+  "Message Queue": { instanceType: "mq.standard", instanceName: "MQ Standard", maxCapacity: 8000 },
+  "Client":     { instanceType: "client.default", instanceName: "Client", maxCapacity: 0 },
 };
 
 const COMPONENT_TYPES = [
@@ -39,7 +46,7 @@ const LB_STRATEGIES = [
 
 import { getNextNameForType } from "@/lib/utils/nameGenerator";
 
-export default function Sidebar({ elements, selectedElements, setElements, excalidrawAPI }: SidebarProps) {
+export default function Sidebar({ elements, selectedElements, setElements, excalidrawAPI, metrics = {} }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<"Properties" | "Metrics">("Properties");
 
   if (selectedElements.length === 0) {
@@ -56,19 +63,25 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
   }
 
   const selectedNode = selectedElements[0];
-  // Extract custom data, or default to an empty object
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const customData = (selectedNode.customData as Record<string, any>) || {};
+  const customData = (selectedNode.customData as ComponentCustomData) || {};
+  const liveMetrics = metrics[selectedNode.id] || { incoming: 0, processed: 0, dropped: 0 };
 
-  // Handle property updates
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateCustomData = (updates: Record<string, any>) => {
+  const instanceInfo = customData.componentType
+    ? DEFAULT_INSTANCE_FOR_TYPE[customData.componentType]
+    : null;
+
+  // Compute load percentage from live metrics
+  const maxCap = customData.maxCapacity || instanceInfo?.maxCapacity || 0;
+  const loadPercent = maxCap > 0
+    ? Math.min(100, (liveMetrics.incoming / maxCap) * 100)
+    : 0;
+
+  const updateCustomData = (updates: Partial<ComponentCustomData>) => {
     let newElements = [...elements];
-    
-    // Check if we need to update name due to type change or empty name
+
     let newName = updates.name !== undefined ? updates.name : customData.name;
     const isNewTypeSelection = updates.componentType && updates.componentType !== customData.componentType;
-    
+
     if (isNewTypeSelection && !customData.name) {
       newName = getNextNameForType(updates.componentType, elements);
       updates.name = newName;
@@ -76,11 +89,19 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
       newName = getNextNameForType(customData.componentType || "New Service", elements);
       updates.name = newName;
     }
-    
+
+    // Auto-assign instance when component type changes
+    if (isNewTypeSelection) {
+      const defaultInst = DEFAULT_INSTANCE_FOR_TYPE[updates.componentType];
+      if (defaultInst) {
+        updates.instanceType = defaultInst.instanceType;
+        updates.maxCapacity = defaultInst.maxCapacity;
+      }
+    }
+
     // Update or create bound text element if name is changing
     if (newName !== undefined && newName !== customData.name) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const boundTextRef = selectedNode.boundElements?.find((e: any) => e.type === "text");
+      const boundTextRef = selectedNode.boundElements?.find((e) => e.type === "text");
       if (boundTextRef) {
         newElements = newElements.map(el => {
           if (el.id === boundTextRef.id) {
@@ -95,7 +116,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
           type: "text",
           x: selectedNode.x + selectedNode.width / 2 - 50,
           y: selectedNode.y + selectedNode.height / 2 - 12.5,
-          width: 100, // Excalidraw will auto-calculate actual size
+          width: 100,
           height: 25,
           angle: 0,
           strokeColor: selectedNode.strokeColor,
@@ -126,10 +147,9 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
           originalText: newName,
           lineHeight: 1.2
         };
-        
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        newElements.push(newTextElement as any);
-        
+
+        newElements.push(newTextElement as unknown as ExcalidrawElement);
+
         newElements = newElements.map(el => {
           if (el.id === selectedNode.id) {
             return {
@@ -147,15 +167,14 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
         return {
           ...el,
           customData: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...(el.customData as Record<string, any> || {}),
+            ...(el.customData as ComponentCustomData || {}),
             ...updates
           }
         };
       }
       return el;
     });
-    
+
     setElements(newElements);
     if (excalidrawAPI) {
       excalidrawAPI.updateScene({ elements: newElements });
@@ -168,16 +187,6 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
 
   const handleComponentTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     updateCustomData({ componentType: e.target.value });
-  };
-
-  const handleInstanceTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const instance = AWS_INSTANCES[e.target.value];
-    if (instance) {
-      updateCustomData({ 
-        instanceType: e.target.value,
-        maxCapacity: instance.rps
-      });
-    }
   };
 
   return (
@@ -237,24 +246,6 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   </select>
                 </div>
 
-                {customData.componentType && customData.componentType !== "Client" && (
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Instance Type</label>
-                    <select
-                      className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                      value={customData.instanceType || ""}
-                      onChange={handleInstanceTypeChange}
-                    >
-                      <option value="" disabled>Select Instance...</option>
-                      {Object.entries(AWS_INSTANCES).map(([key, inst]) => (
-                        <option key={key} value={key}>
-                          {inst.name} ({inst.rps} RPS)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 {customData.componentType === "ALB" && (
                   <div>
                     <label className="block text-sm text-gray-300 mb-1">Routing Strategy</label>
@@ -269,61 +260,78 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                     </select>
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">Max Capacity (RPS)</label>
-                  <input
-                    type="number"
-                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                    value={customData.maxCapacity || 0}
-                    disabled
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Automatically set by Instance Type.</p>
-                </div>
               </div>
             </div>
+
+            {/* Instance details — shown as read-only neon info block */}
+            {instanceInfo && customData.componentType !== "Client" && (
+              <>
+                <hr className="border-[#3a3a3a]" />
+                <div className="bg-[#111] border border-cyan-500/30 rounded-lg p-4 space-y-2">
+                  <h4 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-2">Instance Details</h4>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">Type</span>
+                    <span className="text-cyan-300 font-mono text-sm">{instanceInfo.instanceName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">Max RPS</span>
+                    <span className="text-cyan-300 font-mono text-sm">{instanceInfo.maxCapacity.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">Load</span>
+                    <span className={`font-mono text-sm font-bold ${
+                      loadPercent >= 100 ? "text-red-400" : loadPercent >= 70 ? "text-yellow-400" : "text-cyan-300"
+                    }`}>
+                      ~{loadPercent.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#1a1a1a] rounded-full h-1.5 overflow-hidden mt-1">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        loadPercent >= 100 ? "bg-red-500" : loadPercent >= 70 ? "bg-yellow-500" : "bg-cyan-400"
+                      }`}
+                      style={{ width: `${Math.min(100, loadPercent)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
             <h3 className="text-sm font-medium text-gray-400 mb-2 uppercase tracking-wider">Live Metrics</h3>
-            
-            <div className="bg-[#222] border border-[#3a3a3a] rounded-lg p-4 space-y-3">
+
+            <div className={`bg-[#222] border ${liveMetrics.dropped > 0 ? "border-red-500/50" : "border-[#3a3a3a]"} rounded-lg p-4 space-y-3 transition-colors duration-300`}>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Incoming RPS</span>
-                <span className="font-mono text-green-400">{customData.metrics?.incoming || 0}</span>
+                <span className="font-mono text-indigo-400">{liveMetrics.incoming.toFixed(0)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Processed RPS</span>
-                <span className="font-mono text-blue-400">{customData.metrics?.processed || 0}</span>
+                <span className="font-mono text-green-400">{liveMetrics.processed.toFixed(0)}</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-[#3a3a3a]">
-                <span className="text-gray-400 text-sm">Dropped (503s)</span>
-                <span className="font-mono text-red-400">{customData.metrics?.dropped || 0}</span>
+                <span className={`${liveMetrics.dropped > 0 ? "text-red-400" : "text-gray-400"} text-sm font-medium`}>Dropped (503s)</span>
+                <span className={`font-mono ${liveMetrics.dropped > 0 ? "text-red-500 font-bold" : "text-gray-500"}`}>
+                  {liveMetrics.dropped.toFixed(0)}
+                </span>
               </div>
-            </div>
-
-            <div className="bg-[#222] border border-[#3a3a3a] rounded-lg p-4">
-              <div className="text-sm text-gray-400 mb-2">Capacity Utilization</div>
-              <div className="w-full bg-[#1a1a1a] rounded-full h-2.5">
-                {/* Calculate utilization percentage */}
-                {(() => {
-                  const incoming = customData.metrics?.incoming || 0;
-                  const max = customData.maxCapacity || 1;
-                  const util = Math.min(100, Math.round((incoming / max) * 100));
-                  const colorClass = util > 90 ? "bg-red-500" : util > 70 ? "bg-yellow-500" : "bg-green-500";
-                  
-                  return (
-                    <div className={`${colorClass} h-2.5 rounded-full transition-all duration-300`} style={{ width: `${util}%` }}></div>
-                  );
-                })()}
-              </div>
-              <div className="text-right text-xs text-gray-500 mt-1">
-                {(() => {
-                  const incoming = customData.metrics?.incoming || 0;
-                  const max = customData.maxCapacity || 1;
-                  return `${Math.round((incoming / max) * 100)}%`;
-                })()}
-              </div>
+              {maxCap > 0 && (
+                <div className="mt-4 pt-3 border-t border-[#3a3a3a]">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-400 text-xs uppercase">Resource Usage</span>
+                    <span className={`text-xs font-mono ${liveMetrics.processed >= maxCap ? 'text-red-400' : 'text-green-400'}`}>
+                      {Math.min(100, (liveMetrics.processed / maxCap) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#111] rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full ${liveMetrics.processed >= maxCap ? 'bg-red-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(100, (liveMetrics.processed / maxCap) * 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

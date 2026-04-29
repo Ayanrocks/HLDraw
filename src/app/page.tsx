@@ -8,6 +8,10 @@ import Sidebar from "@/components/Sidebar";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 import { parseGraph, validateDAG } from "@/lib/simulation/GraphParser";
+import { useSimulation } from "@/lib/simulation/useSimulation";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+
+import TrafficOverlay from "@/components/TrafficOverlay";
 
 // Dynamic import for Excalidraw to prevent SSR issues
 const ExcalidrawWrapper = dynamic(() => import("@/components/ExcalidrawWrapper"), {
@@ -23,16 +27,16 @@ export default function Home() {
   const [simulationError, setSimulationError] = useState<string | null>(null);
 
   // Excalidraw API and Persistence state
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [initialData, setInitialData] = useState<any>(null);
+  const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  
+  const { metrics } = useSimulation(isSimulating, elements, globalRps, excalidrawAPI);
+
+  const [initialData, setInitialData] = useState<{ elements: readonly ExcalidrawElement[] } | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from IndexedDB on mount
   useEffect(() => {
     get("hlDraw-elements").then((storedElements) => {
-      let safeElements: any[] = [];
+      let safeElements: ExcalidrawElement[] = [];
       if (storedElements && Array.isArray(storedElements)) {
         // Sanitize corrupted elements that might have infinite/NaN bounds
         safeElements = storedElements.filter(el =>
@@ -57,10 +61,15 @@ export default function Home() {
     });
   }, []);
 
-  // Save to IndexedDB whenever elements change (debounced implicitly by React renders, but good enough)
+  // Save to IndexedDB whenever elements change
   useEffect(() => {
     if (isLoaded) {
       set("hlDraw-elements", elements);
+      // Also store the pure graph representation in our DB module
+      const graph = parseGraph(elements);
+      import("@/lib/db/GraphStore").then(({ saveOrUpdateGraph }) => {
+        saveOrUpdateGraph("main-graph", graph).catch(console.error);
+      });
     }
   }, [elements, isLoaded]);
 
@@ -68,11 +77,16 @@ export default function Home() {
   useEffect(() => {
     if (isSimulating) {
       const graph = parseGraph(elements);
-      const { isValid, error } = validateDAG(graph);
+      const { isValid, error, errorNodes } = validateDAG(graph);
 
       if (!isValid) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         setSimulationError(error || "Invalid Architecture");
         setIsSimulating(false);
+        if (errorNodes && errorNodes.length > 0 && excalidrawAPI) {
+          const selectedElementIds = errorNodes.reduce((acc, id) => ({ ...acc, [id]: true }), {});
+          excalidrawAPI.updateScene({ appState: { selectedElementIds } });
+        }
       } else {
         setSimulationError(null);
         // Simulation engine tick goes here
@@ -80,7 +94,7 @@ export default function Home() {
     } else {
       setSimulationError(null);
     }
-  }, [isSimulating, elements]);
+  }, [isSimulating, elements, excalidrawAPI]);
 
   if (!isLoaded) return null; // Wait for initial load
 
@@ -101,12 +115,18 @@ export default function Home() {
             setExcalidrawAPI={setExcalidrawAPI}
             initialData={initialData}
           />
+          <TrafficOverlay
+            isSimulating={isSimulating && !simulationError}
+            excalidrawAPI={excalidrawAPI}
+            metrics={metrics}
+          />
         </main>
         <Sidebar
           elements={elements}
           selectedElements={selectedElements}
           setElements={setElements}
           excalidrawAPI={excalidrawAPI}
+          metrics={metrics}
         />
       </div>
     </div>
