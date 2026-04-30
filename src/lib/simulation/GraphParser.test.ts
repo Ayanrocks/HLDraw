@@ -100,7 +100,7 @@ describe('DAG Validation', () => {
     const result = validateDAG(graph);
 
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('No \'Client\' node found');
+    expect(result.error).toContain("No 'Client' or load-generating node found");
   });
 
   it('should return invalid if a cycle is detected', () => {

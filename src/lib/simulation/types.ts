@@ -3,6 +3,7 @@ export interface ComponentCustomData {
   name?: string;
   instanceType?: string;
   maxCapacity?: number;
+  sourceRps?: number;
   lbStrategy?: string;
   wasSimulating?: boolean;
   originalColor?: string;

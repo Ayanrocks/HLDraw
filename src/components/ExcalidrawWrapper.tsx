@@ -2,13 +2,13 @@ import React from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawElement, ExcalidrawTextElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
-import type { AppState, ExcalidrawImperativeAPI, ImportedDataState } from "@excalidraw/excalidraw/types";
+import type { AppState, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 interface ExcalidrawWrapperProps {
   setElements: (elements: readonly ExcalidrawElement[]) => void;
   setSelectedElements: (elements: readonly ExcalidrawElement[]) => void;
-  setExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
-  initialData: ImportedDataState | null;
+  setExcalidrawAPI: (api: ExcalidrawImperativeAPI | null) => void;
+  initialData: { elements?: readonly ExcalidrawElement[] } | null;
 }
 
 const UI_OPTIONS = {
@@ -20,6 +20,26 @@ const UI_OPTIONS = {
     toggleTheme: false,
     saveAsImage: true,
   },
+};
+
+const isPointInShape = (px: number, py: number, shape: ExcalidrawElement) => {
+  const MARGIN = 10;
+  
+  if (shape.angle) {
+    const cx = shape.x + shape.width / 2;
+    const cy = shape.y + shape.height / 2;
+    const cos = Math.cos(-shape.angle);
+    const sin = Math.sin(-shape.angle);
+    const dx = px - cx;
+    const dy = py - cy;
+    px = cx + (dx * cos - dy * sin);
+    py = cy + (dx * sin + dy * cos);
+  }
+
+  return px >= shape.x - MARGIN && 
+         px <= shape.x + shape.width + MARGIN && 
+         py >= shape.y - MARGIN && 
+         py <= shape.y + shape.height + MARGIN;
 };
 
 const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
@@ -38,9 +58,11 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
     }
   }, [initialData]);
 
-  const handleExcalidrawAPI = React.useCallback((api: ExcalidrawImperativeAPI) => {
-    apiRef.current = api;
-    setExcalidrawAPI(api);
+  const handleExcalidrawAPI = React.useCallback((api: ExcalidrawImperativeAPI | null) => {
+    if (api) {
+      apiRef.current = api;
+      setExcalidrawAPI(api);
+    }
   }, [setExcalidrawAPI]);
 
   const onChange = React.useCallback((
@@ -60,46 +82,101 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
       }
     }
 
-    if (newlyDeletedIds.size > 0 && apiRef.current) {
-      let needsUpdate = false;
-      const newElementsToUpdate = excalidrawElements.map(el => {
+    let needsUpdate = false;
+    let newElementsToUpdate = [...excalidrawElements];
+
+    // Pass 1: Mark text elements as deleted if their container is deleted
+    if (newlyDeletedIds.size > 0) {
+      newElementsToUpdate = newElementsToUpdate.map(el => {
         if (el.isDeleted) return el;
         
-        let shouldDelete = false;
-        
-        // 1. Text bound to the deleted node
         if (el.type === "text") {
           const textEl = el as unknown as ExcalidrawTextElement;
           if (textEl.containerId && newlyDeletedIds.has(textEl.containerId)) {
-            shouldDelete = true;
+            needsUpdate = true;
+            return { ...el, isDeleted: true };
           }
         }
         
-        // 2. Arrow (relationship) connected to the deleted node
-        if (el.type === "arrow") {
-          const prevArrow = prevElements.find(pe => pe.id === el.id);
-          if (prevArrow && prevArrow.type === "arrow") {
-             const arrow = prevArrow as unknown as ExcalidrawArrowElement;
-             const startId = arrow.startBinding?.elementId;
-             const endId = arrow.endBinding?.elementId;
-             if ((startId && newlyDeletedIds.has(startId)) || (endId && newlyDeletedIds.has(endId))) {
-               shouldDelete = true;
-             }
+        return el;
+      });
+    }
+
+    // Pass 2: Magnetic functionality for arrows
+    const isInteracting = 
+      appState.selectedElementsAreBeingDragged || 
+      appState.isResizing || 
+      appState.isRotating || 
+      appState.newElement !== null;
+
+    if (!isInteracting) {
+      const bindableShapes = newElementsToUpdate.filter(el => 
+        !el.isDeleted && 
+        el.type !== "arrow" && el.type !== "text" && el.type !== "freedraw" && el.type !== "line"
+      );
+
+      newElementsToUpdate = newElementsToUpdate.map(el => {
+        if (el.isDeleted || el.type !== "arrow") return el;
+        
+        const arrow = el as unknown as ExcalidrawArrowElement;
+        const points = arrow.points;
+        if (!points || points.length < 2) return el;
+
+        const startX = arrow.x + points[0][0];
+        const startY = arrow.y + points[0][1];
+        
+        const lastIdx = points.length - 1;
+        const endX = arrow.x + points[lastIdx][0];
+        const endY = arrow.y + points[lastIdx][1];
+
+        let changed = false;
+        let newStartBinding = arrow.startBinding;
+        let newEndBinding = arrow.endBinding;
+
+        // Handle explicitly deleted endpoints (clean up bindings to deleted shapes)
+        if (newStartBinding?.elementId && newlyDeletedIds.has(newStartBinding.elementId)) {
+          newStartBinding = null;
+          changed = true;
+        }
+        if (newEndBinding?.elementId && newlyDeletedIds.has(newEndBinding.elementId)) {
+          newEndBinding = null;
+          changed = true;
+        }
+
+        // Magnetic snap: if an endpoint is unbound, check if it lies within a bindable shape
+        if (!newStartBinding) {
+          const shape = bindableShapes.find(s => isPointInShape(startX, startY, s));
+          if (shape && shape.id !== arrow.id) {
+            newStartBinding = { elementId: shape.id } as any; // removed focus and gap to let excalidraw default
+            changed = true;
           }
         }
 
-        if (shouldDelete) {
-          needsUpdate = true;
-          return { ...el, isDeleted: true };
+        if (!newEndBinding) {
+          const shape = bindableShapes.find(s => isPointInShape(endX, endY, s));
+          if (shape && shape.id !== arrow.id) {
+            newEndBinding = { elementId: shape.id } as any;
+            changed = true;
+          }
         }
+
+        if (changed) {
+          needsUpdate = true;
+          return {
+            ...el,
+            startBinding: newStartBinding,
+            endBinding: newEndBinding
+          } as unknown as ExcalidrawElement;
+        }
+        
         return el;
       });
+    }
 
-      if (needsUpdate) {
-        // Update scene to mark relationships and text as deleted too
-        apiRef.current.updateScene({ elements: newElementsToUpdate });
-        return; // Wait for the subsequent onChange to update state
-      }
+    if (needsUpdate && apiRef.current) {
+      // Update scene to mark relationships and text as deleted too
+      apiRef.current.updateScene({ elements: newElementsToUpdate });
+      return; // Wait for the subsequent onChange to update state
     }
 
     prevElementsRef.current = excalidrawElements;

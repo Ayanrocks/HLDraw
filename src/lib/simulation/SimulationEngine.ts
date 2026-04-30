@@ -18,11 +18,16 @@ export function computeSimulationFrame(
     metrics[nodeId] = { incoming: 0, processed: 0, dropped: 0 };
   }
 
-  // Inject load into Clients
+  // Inject load into Clients and components with sourceRps
   for (const nodeId of topologicalOrder) {
     const node = graph.nodes.get(nodeId);
-    if (node?.customData.componentType === "Client") {
+    if (!node) continue;
+    
+    if (node.customData.componentType === "Client") {
       metrics[nodeId].incoming += globalRps;
+    }
+    if (node.customData.sourceRps && node.customData.sourceRps > 0) {
+      metrics[nodeId].incoming += Number(node.customData.sourceRps);
     }
   }
 

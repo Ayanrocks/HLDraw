@@ -19,3 +19,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 11. Developer and humans should be able to understand and extend the code
 12. Do not use absolute paths, use relative paths
 13. Do not use any hardcoded values, use constants
+14. Always sanitize Excalidraw element properties (x, y, width, height) to ensure they are valid finite numbers before updating the scene or saving to state, as NaN or extremely large values will crash the Excalidraw rendering engine with a 'Canvas exceeds max size' error.

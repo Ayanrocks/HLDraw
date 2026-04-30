@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { SYSTEM_DESIGN_COMPONENTS } from "@excalidraw/excalidraw";
 
 import type { NodeMetrics } from "@/lib/simulation/SimulationEngine";
 
@@ -19,16 +20,41 @@ interface SidebarProps {
  * No user-selectable dropdown — selecting a type auto-assigns the instance.
  */
 const DEFAULT_INSTANCE_FOR_TYPE: Record<string, { instanceType: string; instanceName: string; maxCapacity: number }> = {
+  // Legacy
   "Web Server": { instanceType: "m5.large", instanceName: "m5.large", maxCapacity: 1500 },
   "App Server": { instanceType: "t3.medium", instanceName: "t3.medium", maxCapacity: 500 },
   "DB":         { instanceType: "db.m5.large", instanceName: "db.m5.large", maxCapacity: 2000 },
-  "Cache":      { instanceType: "cache.t3.medium", instanceName: "cache.t3.medium", maxCapacity: 5000 },
   "ALB":        { instanceType: "alb.standard", instanceName: "ALB Standard", maxCapacity: 10000 },
   "Message Queue": { instanceType: "mq.standard", instanceName: "MQ Standard", maxCapacity: 8000 },
+  
+  // From SYSTEM_DESIGN_COMPONENTS
   "Client":     { instanceType: "client.default", instanceName: "Client", maxCapacity: 0 },
+  "Application server": { instanceType: "t3.medium", instanceName: "t3.medium", maxCapacity: 500 },
+  "Multi Instance server": { instanceType: "m5.large", instanceName: "m5.large", maxCapacity: 1500 },
+  "server": { instanceType: "t3.medium", instanceName: "t3.medium", maxCapacity: 500 },
+  "Multi Instance": { instanceType: "m5.large", instanceName: "m5.large", maxCapacity: 1500 },
+  "Server": { instanceType: "t3.medium", instanceName: "t3.medium", maxCapacity: 500 },
+  "Relational DB": { instanceType: "db.m5.large", instanceName: "db.m5.large", maxCapacity: 2000 },
+  "Object Storage": { instanceType: "s3.standard", instanceName: "s3.standard", maxCapacity: 10000 },
+  "Cold Storage": { instanceType: "s3.glacier", instanceName: "s3.glacier", maxCapacity: 1000 },
+  "Document DB": { instanceType: "db.m5.large", instanceName: "db.m5.large", maxCapacity: 2000 },
+  "Columnar DB": { instanceType: "db.r5.large", instanceName: "db.r5.large", maxCapacity: 3000 },
+  "Graph DB": { instanceType: "db.r5.large", instanceName: "db.r5.large", maxCapacity: 2000 },
+  "Stack Storage": { instanceType: "storage.standard", instanceName: "storage.standard", maxCapacity: 5000 },
+  "Cache": { instanceType: "cache.t3.medium", instanceName: "cache.t3.medium", maxCapacity: 5000 },
+  "Auth & IAM": { instanceType: "auth.standard", instanceName: "auth.standard", maxCapacity: 5000 },
+  "DNS": { instanceType: "route53", instanceName: "route53", maxCapacity: 100000 },
+  "Load Balancer": { instanceType: "alb.standard", instanceName: "ALB Standard", maxCapacity: 10000 },
+  "Message Q": { instanceType: "mq.standard", instanceName: "MQ Standard", maxCapacity: 8000 },
+  "Pipeline": { instanceType: "pipeline.standard", instanceName: "pipeline.standard", maxCapacity: 1000 },
+  "cloud": { instanceType: "cloud", instanceName: "cloud", maxCapacity: 100000 },
+  "CDN": { instanceType: "cdn.standard", instanceName: "cdn.standard", maxCapacity: 50000 },
+  "Archive": { instanceType: "s3.glacier", instanceName: "s3.glacier", maxCapacity: 1000 },
+  "Mobile": { instanceType: "client.mobile", instanceName: "Mobile Client", maxCapacity: 0 },
+  "Web Application": { instanceType: "client.web", instanceName: "Web Client", maxCapacity: 0 },
 };
 
-const COMPONENT_TYPES = [
+const COMPONENT_TYPES = Array.from(new Set([
   "Client",
   "ALB",
   "Web Server",
@@ -36,7 +62,8 @@ const COMPONENT_TYPES = [
   "DB",
   "Cache",
   "Message Queue",
-];
+  ...SYSTEM_DESIGN_COMPONENTS
+]));
 
 const LB_STRATEGIES = [
   "Round Robin",
@@ -83,7 +110,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
     const isNewTypeSelection = updates.componentType && updates.componentType !== customData.componentType;
 
     if (isNewTypeSelection && !customData.name) {
-      newName = getNextNameForType(updates.componentType, elements);
+      newName = getNextNameForType(updates.componentType!, elements);
       updates.name = newName;
     } else if (updates.name === "") {
       newName = getNextNameForType(customData.componentType || "New Service", elements);
@@ -91,7 +118,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
     }
 
     // Auto-assign instance when component type changes
-    if (isNewTypeSelection) {
+    if (isNewTypeSelection && updates.componentType) {
       const defaultInst = DEFAULT_INSTANCE_FOR_TYPE[updates.componentType];
       if (defaultInst) {
         updates.instanceType = defaultInst.instanceType;
@@ -100,7 +127,10 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
     }
 
     // Update or create bound text element if name is changing
-    if (newName !== undefined && newName !== customData.name) {
+    // Only bind text to basic shapes, not images or complex SVGs (like system design components)
+    const isBasicShape = ["rectangle", "ellipse", "diamond", "cylinder"].includes(selectedNode.type);
+    
+    if (isBasicShape && newName !== undefined && newName !== customData.name) {
       const boundTextRef = selectedNode.boundElements?.find((e) => e.type === "text");
       if (boundTextRef) {
         newElements = newElements.map(el => {
@@ -114,8 +144,8 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
         const newTextElement = {
           id: textElementId,
           type: "text",
-          x: selectedNode.x + selectedNode.width / 2 - 50,
-          y: selectedNode.y + selectedNode.height / 2 - 12.5,
+          x: (selectedNode.x || 0) + (selectedNode.width || 0) / 2 - 50,
+          y: (selectedNode.y || 0) + (selectedNode.height || 0) / 2 - 12.5,
           width: 100,
           height: 25,
           angle: 0,
@@ -244,6 +274,19 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Source RPS (Optional)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    value={customData.sourceRps ?? ""}
+                    onChange={(e) => updateCustomData({ sourceRps: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    placeholder="e.g. 100 (For disjoint components)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Generates its own traffic independent of global RPS.</p>
                 </div>
 
                 {customData.componentType === "ALB" && (

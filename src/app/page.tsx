@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { get, set } from "idb-keyval";
 import TopBar from "@/components/TopBar";
-import Sidebar from "@/components/Sidebar";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 import { parseGraph, validateDAG } from "@/lib/simulation/GraphParser";
@@ -18,6 +17,8 @@ const ExcalidrawWrapper = dynamic(() => import("@/components/ExcalidrawWrapper")
   ssr: false,
   loading: () => <div className="flex flex-1 items-center justify-center bg-[#121212] text-white">Loading Canvas...</div>,
 });
+
+const Sidebar = dynamic(() => import("@/components/Sidebar"), { ssr: false });
 
 export default function Home() {
   const [isSimulating, setIsSimulating] = useState(false);
@@ -40,10 +41,11 @@ export default function Home() {
       if (storedElements && Array.isArray(storedElements)) {
         // Sanitize corrupted elements that might have infinite/NaN bounds
         safeElements = storedElements.filter(el =>
-          el && typeof el.width === 'number' && typeof el.height === 'number' &&
-          !isNaN(el.width) && !isNaN(el.height) &&
-          el.width > 0 && el.height > 0 &&
-          el.width < 50000 && el.height < 50000
+          el && 
+          typeof el.width === 'number' && !isNaN(el.width) && el.width >= 0 && el.width < 50000 &&
+          typeof el.height === 'number' && !isNaN(el.height) && el.height >= 0 && el.height < 50000 &&
+          typeof el.x === 'number' && !isNaN(el.x) && Math.abs(el.x) < 50000 &&
+          typeof el.y === 'number' && !isNaN(el.y) && Math.abs(el.y) < 50000
         );
       }
 
@@ -80,11 +82,53 @@ export default function Home() {
       const { isValid, error, errorNodes } = validateDAG(graph);
 
       if (!isValid) {
+        // Detailed console logging for debugging
+        console.error("================ SIMULATION ERROR ================");
+        console.error("Error:", error || "Invalid Architecture");
+        if (errorNodes) {
+          console.error(`Affected Nodes (${errorNodes.length}):`);
+          errorNodes.forEach(id => {
+            const node = graph.nodes.get(id);
+            const el = node?.element;
+            console.error(
+              `  → [${id}] type=${el?.type ?? "?"}, customData=`,
+              node?.customData ?? {},
+              `edges: in=${node?.incomingEdges.length ?? 0} out=${node?.outgoingEdges.length ?? 0}`
+            );
+          });
+        }
+        console.error("Full Graph:", { nodes: graph.nodes.size, edges: graph.edges.size });
+        console.error("==================================================");
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
         setSimulationError(error || "Invalid Architecture");
         setIsSimulating(false);
         if (errorNodes && errorNodes.length > 0 && excalidrawAPI) {
-          const selectedElementIds = errorNodes.reduce((acc, id) => ({ ...acc, [id]: true }), {});
+          const selectedElementIds: Record<string, true> = {};
+          
+          errorNodes.forEach(id => {
+            selectedElementIds[id] = true;
+            const nodeEl = elements.find(el => el.id === id);
+            
+            // If the node is part of a group (like a complex component), select the entire group
+            if (nodeEl && nodeEl.groupIds && nodeEl.groupIds.length > 0) {
+              elements.forEach(otherEl => {
+                if (otherEl.groupIds?.some(gId => nodeEl.groupIds!.includes(gId))) {
+                  selectedElementIds[otherEl.id] = true;
+                }
+              });
+            }
+            
+            // Also select bound text elements if any
+            if (nodeEl && nodeEl.boundElements) {
+              nodeEl.boundElements.forEach(bound => {
+                if (bound.type === "text") {
+                  selectedElementIds[bound.id] = true;
+                }
+              });
+            }
+          });
+
           excalidrawAPI.updateScene({ appState: { selectedElementIds } });
         }
       } else {

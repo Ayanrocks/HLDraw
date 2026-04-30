@@ -25,17 +25,44 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
   const nodes = new Map<string, GraphNode>();
   const edges = new Map<string, GraphEdge>();
 
-  // First pass: Identify all potential nodes (elements that can be bound to)
+  // Mapping from individual element ID to logical node ID
+  const elementToNodeId = new Map<string, string>();
+
+  // First pass: Group elements and identify logical nodes
   for (const el of elements) {
     if (el.isDeleted) continue;
-    if (el.type !== "arrow" && el.type !== "line" && el.type !== "freedraw" && el.type !== "text") {
-      nodes.set(el.id, {
-        id: el.id,
-        element: el,
-        incomingEdges: [],
-        outgoingEdges: [],
-        customData: el.customData || {},
-      });
+    
+    // Skip text, connectors, and elements bound to a container (labels)
+    if (el.type === "arrow" || el.type === "line" || el.type === "freedraw" || el.type === "text") continue;
+    const textEl = el as unknown as { containerId?: string };
+    if (textEl.containerId) continue;
+
+    {
+      // Determine logical node ID (top-most group ID or element ID)
+      const logicalNodeId = el.groupIds && el.groupIds.length > 0 
+        ? el.groupIds[el.groupIds.length - 1] 
+        : el.id;
+        
+      elementToNodeId.set(el.id, logicalNodeId);
+
+      if (!nodes.has(logicalNodeId)) {
+        nodes.set(logicalNodeId, {
+          id: logicalNodeId,
+          element: el, // Keep the first element as representative
+          incomingEdges: [],
+          outgoingEdges: [],
+          customData: el.customData || {},
+        });
+      } else {
+        // Merge customData in case it was stored on a different shape in the group
+        const existingNode = nodes.get(logicalNodeId)!;
+        if (Object.keys(el.customData || {}).length > 0) {
+          existingNode.customData = {
+            ...existingNode.customData,
+            ...el.customData
+          };
+        }
+      }
     }
   }
 
@@ -45,8 +72,11 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
     if (el.type === "arrow") {
       const arrow = el as ExcalidrawArrowElement;
       
-      const sourceId = arrow.startBinding?.elementId;
-      const targetId = arrow.endBinding?.elementId;
+      const rawSourceId = arrow.startBinding?.elementId;
+      const rawTargetId = arrow.endBinding?.elementId;
+
+      const sourceId = rawSourceId ? elementToNodeId.get(rawSourceId) : undefined;
+      const targetId = rawTargetId ? elementToNodeId.get(rawTargetId) : undefined;
 
       if (sourceId && targetId && nodes.has(sourceId) && nodes.has(targetId)) {
         edges.set(arrow.id, {
@@ -61,9 +91,6 @@ export function parseGraph(elements: readonly ExcalidrawElement[]): Graph {
       }
     }
   }
-
-  // Filter out nodes that have no connections AND are not designated components?
-  // We'll keep them for now, but in simulation we only care about connected components starting from "Client"
 
   return { nodes, edges };
 }
@@ -113,10 +140,12 @@ export function getTopologicalOrder(graph: Graph): { order: string[]; error?: st
 }
 
 export function validateDAG(graph: Graph): { isValid: boolean; error?: string; topologicalOrder?: string[]; errorNodes?: string[] } {
-  // Check for untyped components first
+  // Check for untyped components that are actually connected (have edges)
+  // Isolated shapes without type are treated as decorative and ignored
   const untypedNodes: string[] = [];
   for (const [nodeId, node] of graph.nodes) {
-    if (!node.customData.componentType) {
+    const isConnected = node.incomingEdges.length > 0 || node.outgoingEdges.length > 0;
+    if (!node.customData.componentType && isConnected) {
       untypedNodes.push(nodeId);
     }
   }
@@ -124,7 +153,7 @@ export function validateDAG(graph: Graph): { isValid: boolean; error?: string; t
   if (untypedNodes.length > 0) {
     return {
       isValid: false,
-      error: "Some components are missing a type. Please select a type for them.",
+      error: `${untypedNodes.length} connected component(s) are missing a type. Select them and assign a type in the sidebar.`,
       errorNodes: untypedNodes
     };
   }
@@ -139,19 +168,19 @@ export function validateDAG(graph: Graph): { isValid: boolean; error?: string; t
     };
   }
 
-  // Check if there's at least one Client node
-  let hasClient = false;
+  // Check if there's at least one Client node or a node with sourceRps
+  let hasSource = false;
   for (const node of graph.nodes.values()) {
-    if (node.customData.componentType === "Client") {
-      hasClient = true;
+    if (node.customData.componentType === "Client" || (node.customData.sourceRps && node.customData.sourceRps > 0)) {
+      hasSource = true;
       break;
     }
   }
 
-  if (!hasClient && graph.nodes.size > 0 && graph.edges.size > 0) {
+  if (!hasSource && graph.nodes.size > 0 && graph.edges.size > 0) {
     return {
       isValid: false,
-      error: "No 'Client' node found. The simulation requires at least one Client to generate load."
+      error: "No 'Client' or load-generating node found. The simulation requires at least one Client or a component with 'Source RPS' to generate load."
     };
   }
 
