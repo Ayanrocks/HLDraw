@@ -31,7 +31,10 @@ export function computeSimulationFrame(
     
     const cType = node.customData.componentType || "";
     if (isClientType(cType)) {
-      metrics[nodeId].incoming += globalRps;
+      // Only inject global traffic if the client is connected to something
+      if (node.outgoingEdges.length > 0) {
+        metrics[nodeId].incoming += globalRps;
+      }
     }
     if (node.customData.sourceRps && node.customData.sourceRps > 0) {
       metrics[nodeId].incoming += Number(node.customData.sourceRps);
