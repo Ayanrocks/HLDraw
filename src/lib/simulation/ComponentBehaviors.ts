@@ -1,61 +1,68 @@
-export type ComponentType = "Client" | "ALB" | "Web Server" | "App Server" | "DB" | "Cache" | "Message Queue";
+/**
+ * Component behavior lookup.
+ *
+ * Delegates to the centralized ComponentRegistry for all definitions.
+ * This module re-exports a backwards-compatible `COMPONENT_BEHAVIORS` map
+ * so existing simulation engine code continues to work.
+ */
+import {
+  COMPONENT_REGISTRY,
+  type RoutingStrategy,
+  type ComponentDefinition,
+} from "./ComponentRegistry";
+
+export type ComponentType = string;
 
 export interface ComponentBehavior {
   type: ComponentType;
   description: string;
   acceptsIncoming: boolean;
   forwardsOutgoing: boolean;
-  routingStrategy: "all" | "round-robin" | "hash" | "none" | "broadcast";
+  routingStrategy: RoutingStrategy;
 }
 
-export const COMPONENT_BEHAVIORS: Record<string, ComponentBehavior> = {
-  "Client": {
-    type: "Client",
-    description: "Generates initial traffic/requests. Does not accept incoming traffic.",
-    acceptsIncoming: false,
-    forwardsOutgoing: true,
-    routingStrategy: "all", // Clients push traffic to whatever they are connected to
-  },
-  "ALB": {
-    type: "ALB",
-    description: "Application Load Balancer. Distributes traffic across connected targets using a specified strategy.",
-    acceptsIncoming: true,
-    forwardsOutgoing: true,
-    routingStrategy: "round-robin", // User mentioned "algorithm specified". Defaults to round-robin.
-  },
-  "Web Server": {
-    type: "Web Server",
-    description: "Handles HTTP requests and serves static content, forwards dynamic requests to App Servers.",
-    acceptsIncoming: true,
-    forwardsOutgoing: true,
-    routingStrategy: "round-robin", // Send traffic forward equally in alternate fashion
-  },
-  "App Server": {
-    type: "App Server",
-    description: "Executes business logic. Interacts with DBs and Caches.",
-    acceptsIncoming: true,
-    forwardsOutgoing: true,
-    routingStrategy: "round-robin", // Send traffic forward equally in alternate fashion
-  },
-  "DB": {
-    type: "DB",
-    description: "Database for persistent storage. Only accepts connections, does not forward traffic.",
-    acceptsIncoming: true,
-    forwardsOutgoing: false,
-    routingStrategy: "none",
-  },
-  "Cache": {
-    type: "Cache",
-    description: "In-memory data store. Returns cached responses or falls back to DB.",
-    acceptsIncoming: true,
-    forwardsOutgoing: true, // Only forwards cache misses
-    routingStrategy: "all",
-  },
-  "Message Queue": {
-    type: "Message Queue",
-    description: "Asynchronous message broker. Accepts messages and distributes to consumers.",
-    acceptsIncoming: true,
-    forwardsOutgoing: true,
-    routingStrategy: "broadcast", // Messages are pulled or pushed to consumers
+/**
+ * Builds the behaviours map from the registry so every registered
+ * component type automatically gets a behaviour entry.
+ */
+function buildBehaviors(): Record<string, ComponentBehavior> {
+  const behaviors: Record<string, ComponentBehavior> = {};
+  for (const [key, def] of Object.entries(COMPONENT_REGISTRY)) {
+    behaviors[key] = {
+      type: key,
+      description: def.description,
+      acceptsIncoming: def.acceptsIncoming,
+      forwardsOutgoing: def.forwardsOutgoing,
+      routingStrategy: def.routingStrategy,
+    };
   }
-};
+  return behaviors;
+}
+
+export const COMPONENT_BEHAVIORS: Record<string, ComponentBehavior> =
+  buildBehaviors();
+
+/**
+ * Resolves the behaviour for a given component type key.
+ * Falls back to a sensible "passthrough" default for unknown types.
+ */
+export function getBehavior(componentType: string): ComponentBehavior {
+  return (
+    COMPONENT_BEHAVIORS[componentType] ?? {
+      type: componentType,
+      description: "Unknown component",
+      acceptsIncoming: true,
+      forwardsOutgoing: true,
+      routingStrategy: "round-robin" as RoutingStrategy,
+    }
+  );
+}
+
+/**
+ * Returns the full definition from the registry, or undefined if unknown.
+ */
+export function getDefinition(
+  componentType: string
+): ComponentDefinition | undefined {
+  return COMPONENT_REGISTRY[componentType];
+}

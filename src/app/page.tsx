@@ -19,6 +19,7 @@ const ExcalidrawWrapper = dynamic(() => import("@/components/ExcalidrawWrapper")
 });
 
 const Sidebar = dynamic(() => import("@/components/Sidebar"), { ssr: false });
+const ComponentPalette = dynamic(() => import("@/components/ComponentPalette"), { ssr: false });
 
 export default function Home() {
   const [isSimulating, setIsSimulating] = useState(false);
@@ -163,6 +164,11 @@ export default function Home() {
             isSimulating={isSimulating && !simulationError}
             excalidrawAPI={excalidrawAPI}
             metrics={metrics}
+          />
+          <ComponentPalette
+            excalidrawAPI={excalidrawAPI}
+            elements={elements}
+            setElements={setElements}
           />
         </main>
         <Sidebar

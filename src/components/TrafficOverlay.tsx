@@ -9,8 +9,19 @@ interface TrafficOverlayProps {
   metrics: Record<string, NodeMetrics>;
 }
 
+interface ErrorParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+}
+
 export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }: TrafficOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const errorParticlesRef = useRef<ErrorParticle[]>([]);
+  const lastTimeRef = useRef<number>(performance.now() / 1000);
 
   useEffect(() => {
     if (!isSimulating || !excalidrawAPI || !canvasRef.current) return;
@@ -34,6 +45,107 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
       const elements = excalidrawAPI.getSceneElements();
 
       const time = performance.now() / 1000; // time in seconds
+      const dt = time - lastTimeRef.current;
+      lastTimeRef.current = time;
+
+      // Filter dead particles
+      errorParticlesRef.current = errorParticlesRef.current.filter(p => p.life > 0);
+
+      // Draw component overlays (highlights and watermarks)
+      elements.forEach((el: ExcalidrawElement) => {
+        if (el.isDeleted || el.type === "arrow" || el.type === "text" || el.type === "freedraw") return;
+
+        const nodeMetrics = metrics[el.id];
+        if (!nodeMetrics) return;
+
+        const maxCapacity = Number(el.customData?.maxCapacity) || Infinity;
+        if (maxCapacity === Infinity && nodeMetrics.incoming === 0) return;
+
+        const isOverloaded = nodeMetrics.dropped > 0;
+        let loadPct = 0;
+        
+        if (maxCapacity !== Infinity) {
+          loadPct = Math.round((nodeMetrics.incoming / maxCapacity) * 100);
+        } else if (nodeMetrics.incoming > 0) {
+          loadPct = 100; // If infinite capacity but has traffic, just show something or ignore
+        }
+
+        if (loadPct === 0) return;
+
+        const screenX = (el.x + appState.scrollX) * appState.zoom.value;
+        const screenY = (el.y + appState.scrollY) * appState.zoom.value;
+        const screenW = el.width * appState.zoom.value;
+        const screenH = el.height * appState.zoom.value;
+
+        ctx.save();
+        ctx.translate(screenX + screenW / 2, screenY + screenH / 2);
+        if (el.angle) ctx.rotate(el.angle);
+
+        // Highlight overloaded component
+        if (isOverloaded) {
+          ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+          ctx.strokeStyle = "rgba(239, 68, 68, 0.8)";
+          ctx.lineWidth = 2 * appState.zoom.value;
+          ctx.shadowColor = "rgba(239, 68, 68, 0.6)";
+          ctx.shadowBlur = 20 * appState.zoom.value;
+
+          ctx.beginPath();
+          ctx.roundRect(-screenW / 2, -screenH / 2, screenW, screenH, 8 * appState.zoom.value);
+          ctx.fill();
+          ctx.stroke();
+
+          // Spawn 503 error particles
+          // Scale spawn rate based on dropped amount, but cap it
+          const spawnChance = Math.min(0.8, nodeMetrics.dropped / 50);
+          if (Math.random() < spawnChance) {
+            errorParticlesRef.current.push({
+              x: el.x + el.width / 2 + (Math.random() - 0.5) * el.width * 0.8,
+              y: el.y + el.height / 2 + (Math.random() - 0.5) * el.height * 0.8,
+              vx: (Math.random() - 0.5) * 60,
+              vy: -80 - Math.random() * 60,
+              life: 1.5,
+              maxLife: 1.5 + Math.random() * 0.5
+            });
+          }
+        }
+
+        // Text below the component for Load %
+        ctx.fillStyle = isOverloaded ? "rgba(239, 68, 68, 0.9)" : "rgba(110, 231, 183, 0.9)";
+        
+        // Fixed logical size scaled by zoom
+        const fontSize = 14 * appState.zoom.value;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(`${loadPct}% load`, 0, screenH / 2 + 8 * appState.zoom.value);
+
+        ctx.restore();
+      });
+
+      // Update and draw 503 particles
+      errorParticlesRef.current.forEach(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 150 * dt; // Gravity effect
+        p.life -= dt;
+
+        const screenX = (p.x + appState.scrollX) * appState.zoom.value;
+        const screenY = (p.y + appState.scrollY) * appState.zoom.value;
+        
+        const opacity = Math.max(0, p.life / p.maxLife);
+        const scale = 1.0 + (1.0 - opacity) * 0.5; // Slight grow over time
+        const fontSize = 16 * appState.zoom.value * scale;
+
+        ctx.save();
+        ctx.fillStyle = `rgba(239, 68, 68, ${opacity})`;
+        ctx.shadowColor = `rgba(239, 68, 68, ${opacity * 0.8})`;
+        ctx.shadowBlur = 8 * appState.zoom.value;
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("503", screenX, screenY);
+        ctx.restore();
+      });
 
       // Find active arrows — guard heavily since elements can change mid-simulation
       elements.forEach((el: ExcalidrawElement) => {

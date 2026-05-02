@@ -1,5 +1,6 @@
 import type { ExcalidrawElement, ExcalidrawArrowElement } from "@excalidraw/excalidraw/element/types";
 import type { ComponentCustomData } from "./types";
+import { isClientType } from "./ComponentRegistry";
 
 export interface GraphNode {
   id: string;
@@ -171,7 +172,7 @@ export function validateDAG(graph: Graph): { isValid: boolean; error?: string; t
   // Check if there's at least one Client node or a node with sourceRps
   let hasSource = false;
   for (const node of graph.nodes.values()) {
-    if (node.customData.componentType === "Client" || (node.customData.sourceRps && node.customData.sourceRps > 0)) {
+    if (isClientType(node.customData.componentType || "") || (node.customData.sourceRps && node.customData.sourceRps > 0)) {
       hasSource = true;
       break;
     }

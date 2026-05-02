@@ -1,4 +1,10 @@
 import type { Graph } from "./GraphParser";
+import {
+  COMPONENT_REGISTRY,
+  isClientType,
+  isLoadBalancerType,
+} from "./ComponentRegistry";
+import { distributeLoad } from "./LoadBalancer";
 
 export interface NodeMetrics {
   incoming: number;
@@ -23,7 +29,8 @@ export function computeSimulationFrame(
     const node = graph.nodes.get(nodeId);
     if (!node) continue;
     
-    if (node.customData.componentType === "Client") {
+    const cType = node.customData.componentType || "";
+    if (isClientType(cType)) {
       metrics[nodeId].incoming += globalRps;
     }
     if (node.customData.sourceRps && node.customData.sourceRps > 0) {
@@ -37,16 +44,21 @@ export function computeSimulationFrame(
     if (!node) continue;
 
     const currentMetrics = metrics[nodeId];
-    const componentType = node.customData.componentType;
+    const componentType = node.customData.componentType || "";
     const maxCapacity = Number(node.customData.maxCapacity) || Infinity;
 
-    // Process capacity limits
-    if (componentType === "Client") {
-      currentMetrics.processed = currentMetrics.incoming; // Clients don't have capacity limits usually
+    // Process capacity limits — clients have no limits
+    if (isClientType(componentType)) {
+      currentMetrics.processed = currentMetrics.incoming;
       currentMetrics.dropped = 0;
     } else {
-      currentMetrics.processed = Math.min(currentMetrics.incoming, maxCapacity);
-      currentMetrics.dropped = Math.max(0, currentMetrics.incoming - maxCapacity);
+      const sourceTraffic = Number(node.customData.sourceRps) || 0;
+      const externalIncoming = Math.max(0, currentMetrics.incoming - sourceTraffic);
+      
+      const externalProcessed = Math.min(externalIncoming, maxCapacity);
+      
+      currentMetrics.processed = externalProcessed + sourceTraffic;
+      currentMetrics.dropped = Math.max(0, externalIncoming - maxCapacity);
     }
 
     const outgoingEdges = node.outgoingEdges;
@@ -63,32 +75,24 @@ export function computeSimulationFrame(
 
     if (targets.length === 0) continue;
 
-    // Distribute traffic
-    if (componentType === "ALB") {
-      const strategy = node.customData.lbStrategy || "Round Robin";
+    // Resolve routing strategy from the registry
+    const registryDef = COMPONENT_REGISTRY[componentType];
+    const routingStrategy = registryDef?.routingStrategy ?? "round-robin";
 
-      if (strategy === "Smart Load Monitor") {
-        // Proportionally distribute based on target maxCapacity
-        const totalCapacity = targets.reduce((sum, t) => sum + (Number(t.customData.maxCapacity) || 100), 0);
-        targets.forEach(t => {
-          const targetCap = Number(t.customData.maxCapacity) || 100;
-          const share = (targetCap / totalCapacity) * processedRps;
-          metrics[t.id].incoming += share;
-        });
-      } else {
-        // Round Robin and Consistent Hashing effectively divide bulk RPS equally in a static frame
-        const split = processedRps / targets.length;
-        targets.forEach(t => {
-          metrics[t.id].incoming += split;
-        });
-      }
-    } else if (componentType === "Message Queue") {
-      // Broadcast to all consumers (each gets full copy of message)
+    // Load Balancers support user-configured strategy overrides
+    if (isLoadBalancerType(componentType)) {
+      const strategy = node.customData.lbStrategy || "Round Robin";
+      const allocations = distributeLoad(strategy, processedRps, targets);
+      targets.forEach((t, i) => {
+        metrics[t.id].incoming += allocations[i];
+      });
+    } else if (routingStrategy === "broadcast") {
+      // Broadcast to all consumers (each gets full copy)
       targets.forEach(t => {
         metrics[t.id].incoming += processedRps;
       });
     } else {
-      // Default: Split equally (Web Server, App Server, etc.)
+      // Default: Split equally (round-robin, all, etc.)
       const split = processedRps / targets.length;
       targets.forEach(t => {
         metrics[t.id].incoming += split;
