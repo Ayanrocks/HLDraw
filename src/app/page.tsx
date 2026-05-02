@@ -33,11 +33,16 @@ export default function Home() {
   
   const { metrics } = useSimulation(isSimulating, elements, globalRps, excalidrawAPI);
 
-  const [initialData, setInitialData] = useState<{ elements: readonly ExcalidrawElement[] } | null>(null);
+  const [initialData, setInitialData] = useState<{ elements?: readonly ExcalidrawElement[], appState?: any } | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const [appState, setAppState] = useState<any>(null);
+
   useEffect(() => {
-    get("hlDraw-elements").then((storedElements) => {
+    Promise.all([
+      get("hlDraw-elements"),
+      get("hlDraw-appState")
+    ]).then(([storedElements, storedAppState]) => {
       let safeElements: ExcalidrawElement[] = [];
       if (storedElements && Array.isArray(storedElements)) {
         // Sanitize corrupted elements that might have infinite/NaN bounds
@@ -50,16 +55,18 @@ export default function Home() {
         );
       }
 
+      const initialAppState = storedAppState || { theme: "dark" };
+
       if (safeElements.length > 0) {
-        setInitialData({ elements: safeElements });
+        setInitialData({ elements: safeElements, appState: initialAppState });
         setElements(safeElements);
       } else {
-        setInitialData({ elements: [] });
+        setInitialData({ elements: [], appState: initialAppState });
       }
       setIsLoaded(true);
     }).catch(() => {
       // Fallback on error
-      setInitialData({ elements: [] });
+      setInitialData({ elements: [], appState: { theme: "dark" } });
       setIsLoaded(true);
     });
   }, []);
@@ -75,6 +82,13 @@ export default function Home() {
       });
     }
   }, [elements, isLoaded]);
+
+  // Save appState whenever it changes
+  useEffect(() => {
+    if (isLoaded && appState) {
+      set("hlDraw-appState", appState);
+    }
+  }, [appState, isLoaded]);
 
   // When simulation starts, validate DAG
   useEffect(() => {
@@ -158,6 +172,7 @@ export default function Home() {
             setElements={setElements}
             setSelectedElements={setSelectedElements}
             setExcalidrawAPI={setExcalidrawAPI}
+            setAppState={setAppState}
             initialData={initialData}
           />
           <TrafficOverlay

@@ -8,16 +8,17 @@ interface ExcalidrawWrapperProps {
   setElements: (elements: readonly ExcalidrawElement[]) => void;
   setSelectedElements: (elements: readonly ExcalidrawElement[]) => void;
   setExcalidrawAPI: (api: ExcalidrawImperativeAPI | null) => void;
-  initialData: { elements?: readonly ExcalidrawElement[] } | null;
+  setAppState?: (appState: Partial<AppState>) => void;
+  initialData: { elements?: readonly ExcalidrawElement[], appState?: Partial<AppState> } | null;
 }
 
 const UI_OPTIONS = {
   canvasActions: {
-    changeViewBackgroundColor: false,
+    changeViewBackgroundColor: true,
     clearCanvas: true,
     loadScene: false,
     saveToActiveFile: false,
-    toggleTheme: false,
+    toggleTheme: true,
     saveAsImage: true,
   },
 };
@@ -46,6 +47,7 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
   setElements,
   setSelectedElements,
   setExcalidrawAPI,
+  setAppState,
   initialData,
 }: ExcalidrawWrapperProps) {
   const prevElementsRef = React.useRef<readonly ExcalidrawElement[]>([]);
@@ -188,12 +190,18 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
     );
     const selected = excalidrawElements.filter(el => selectedIds.includes(el.id) && !el.isDeleted);
     setSelectedElements(selected);
-  }, [setElements, setSelectedElements]);
+
+    if (setAppState) {
+      setAppState({
+        theme: appState.theme,
+        viewBackgroundColor: appState.viewBackgroundColor,
+      });
+    }
+  }, [setElements, setSelectedElements, setAppState]);
 
   return (
     <div className="absolute inset-0">
       <Excalidraw
-        theme="dark"
         onChange={onChange}
         UIOptions={UI_OPTIONS}
         onExcalidrawAPI={handleExcalidrawAPI}

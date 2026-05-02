@@ -59,7 +59,7 @@ export function useSimulation(
             return {
               ...el,
               strokeStyle: "solid" as const,
-              strokeColor: el.customData.originalColor || "#e2e8f0",
+              strokeColor: el.customData.originalColor || "#1e1e1e",
               customData: { ...el.customData, wasSimulating: false }
             };
           }

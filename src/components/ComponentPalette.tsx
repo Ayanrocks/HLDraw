@@ -159,7 +159,7 @@ export default function ComponentPalette({
           y: centerY,
           width,
           height,
-          strokeColor: "#e2e8f0",
+          strokeColor: "#1e1e1e",
           backgroundColor: "transparent",
           label: {
             text: componentKey,
