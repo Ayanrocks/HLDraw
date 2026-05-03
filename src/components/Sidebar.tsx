@@ -70,10 +70,11 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
     ? getDefaultInstanceForType(customData.componentType)
     : null;
 
-  // Compute load percentage from live metrics
-  const maxCap = customData.maxCapacity || instanceInfo?.maxCapacity || 0;
-  const replicas = Math.max(1, Math.floor(Number(customData.replicas) || 1));
-  const effectiveCapacity = maxCap * replicas;
+  // Use engine-computed metrics when available for accurate load display
+  const replicas = (liveMetrics as NodeMetrics).replicas
+    ?? Math.max(1, Math.floor(Number(customData.replicas) || 1));
+  const effectiveCapacity = (liveMetrics as NodeMetrics).effectiveCapacity
+    ?? (customData.maxCapacity || instanceInfo?.maxCapacity || 0) * replicas;
   const loadPercent = effectiveCapacity > 0
     ? Math.min(100, (liveMetrics.incoming / effectiveCapacity) * 100)
     : 0;
@@ -423,18 +424,18 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   </div>
                 </div>
               )}
-              {effectiveCapacity > 0 && (
+              {isFinite(effectiveCapacity) && effectiveCapacity > 0 && (
                 <div className="mt-4 pt-3 border-t border-[#3a3a3a]">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-gray-400 text-xs uppercase">Resource Usage</span>
-                    <span className={`text-xs font-mono ${liveMetrics.processed >= effectiveCapacity ? 'text-red-400' : 'text-green-400'}`}>
-                      {Math.min(100, (liveMetrics.processed / effectiveCapacity) * 100).toFixed(1)}%
+                    <span className={`text-xs font-mono ${loadPercent >= 100 ? 'text-red-400' : loadPercent >= 70 ? 'text-yellow-400' : 'text-green-400'}`}>
+                      {Math.min(100, loadPercent).toFixed(1)}%
                     </span>
                   </div>
                   <div className="w-full bg-[#111] rounded-full h-1.5 overflow-hidden">
                     <div
-                      className={`h-full ${liveMetrics.processed >= effectiveCapacity ? 'bg-red-500' : 'bg-green-500'}`}
-                      style={{ width: `${Math.min(100, (liveMetrics.processed / effectiveCapacity) * 100)}%` }}
+                      className={`h-full transition-all duration-300 ${loadPercent >= 100 ? 'bg-red-500' : loadPercent >= 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(100, loadPercent)}%` }}
                     ></div>
                   </div>
                 </div>

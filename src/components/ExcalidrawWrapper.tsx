@@ -87,14 +87,27 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
     let needsUpdate = false;
     let newElementsToUpdate = [...excalidrawElements];
 
-    // Pass 1: Mark text elements as deleted if their container is deleted
+    // Pass 1: Mark text elements and connected arrows as deleted if their parent is deleted
     if (newlyDeletedIds.size > 0) {
       newElementsToUpdate = newElementsToUpdate.map(el => {
         if (el.isDeleted) return el;
         
+        // Delete bound text when its container is deleted
         if (el.type === "text") {
           const textEl = el as unknown as ExcalidrawTextElement;
           if (textEl.containerId && newlyDeletedIds.has(textEl.containerId)) {
+            needsUpdate = true;
+            return { ...el, isDeleted: true };
+          }
+        }
+
+        // Delete arrows whose start or end component was deleted
+        if (el.type === "arrow") {
+          const arrow = el as unknown as ExcalidrawArrowElement;
+          const startBound = arrow.startBinding?.elementId;
+          const endBound = arrow.endBinding?.elementId;
+          if ((startBound && newlyDeletedIds.has(startBound)) ||
+              (endBound && newlyDeletedIds.has(endBound))) {
             needsUpdate = true;
             return { ...el, isDeleted: true };
           }

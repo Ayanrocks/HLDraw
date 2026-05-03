@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from "react";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { NodeMetrics } from "@/lib/simulation/SimulationEngine";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { isClientType } from "@/lib/simulation/ComponentRegistry";
+import type { ComponentCustomData } from "@/lib/simulation/types";
 
 interface TrafficOverlayProps {
   isSimulating: boolean;
@@ -58,22 +60,20 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
         const nodeMetrics = metrics[el.id];
         if (!nodeMetrics) return;
 
-        const maxCapacity = Number(el.customData?.maxCapacity) || Infinity;
-        const replicaCount = Math.max(1, Math.floor(Number(el.customData?.replicas) || 1));
-        const effectiveCapacity = isFinite(maxCapacity) ? maxCapacity * replicaCount : Infinity;
+        // Clients generate traffic — they don't receive it, so skip load display
+        const componentType = (el.customData as ComponentCustomData)?.componentType || "";
+        if (isClientType(componentType)) return;
 
-        if (effectiveCapacity === Infinity && nodeMetrics.incoming === 0) return;
+        const { effectiveCapacity, incoming } = nodeMetrics;
+        const replicaCount = nodeMetrics.replicas;
+
+        if (incoming === 0) return;
 
         const isOverloaded = nodeMetrics.dropped > 0;
-        let loadPct = 0;
-        
-        if (isFinite(effectiveCapacity) && effectiveCapacity > 0) {
-          loadPct = Math.round((nodeMetrics.incoming / effectiveCapacity) * 100);
-        } else if (nodeMetrics.incoming > 0) {
-          loadPct = 100; // If infinite capacity but has traffic, just show something or ignore
-        }
-
-        if (loadPct === 0) return;
+        const hasFiniteCapacity = isFinite(effectiveCapacity) && effectiveCapacity > 0;
+        const loadPct = hasFiniteCapacity
+          ? Math.round((incoming / effectiveCapacity) * 100)
+          : 0;
 
         const screenX = (el.x + appState.scrollX) * appState.zoom.value;
         const screenY = (el.y + appState.scrollY) * appState.zoom.value;
@@ -113,18 +113,44 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
         }
 
         // Text below the component for Load %
-        ctx.fillStyle = isOverloaded ? "rgba(239, 68, 68, 0.9)" : "rgba(110, 231, 183, 0.9)";
-        
-        // Fixed logical size scaled by zoom
         const fontSize = 14 * appState.zoom.value;
         ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
 
-        const loadLabel = replicaCount > 1
-          ? `${loadPct}% load ×${replicaCount}`
-          : `${loadPct}% load`;
-        ctx.fillText(loadLabel, 0, screenH / 2 + 8 * appState.zoom.value);
+        const replicaSuffix = replicaCount > 1 ? ` ×${replicaCount}` : "";
+        const loadLabel = hasFiniteCapacity
+          ? `${loadPct}% load${replicaSuffix}`
+          : `${Math.round(incoming)} RPS${replicaSuffix}`;
+
+        const textY = screenH / 2 + 8 * appState.zoom.value;
+        const textMetrics = ctx.measureText(loadLabel);
+        const paddingX = 6 * appState.zoom.value;
+        const paddingY = 3 * appState.zoom.value;
+        const pillWidth = textMetrics.width + paddingX * 2;
+        const pillHeight = fontSize + paddingY * 2;
+
+        // Dark background pill for readability on any canvas
+        ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+        ctx.beginPath();
+        ctx.roundRect(
+          -pillWidth / 2,
+          textY - paddingY,
+          pillWidth,
+          pillHeight,
+          4 * appState.zoom.value
+        );
+        ctx.fill();
+
+        // Text with dark stroke outline for extra contrast
+        const textColor = isOverloaded ? "#f87171" : "#6ee7b7";
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+        ctx.lineWidth = 3 * appState.zoom.value;
+        ctx.lineJoin = "round";
+        ctx.strokeText(loadLabel, 0, textY);
+
+        ctx.fillStyle = textColor;
+        ctx.fillText(loadLabel, 0, textY);
 
         ctx.restore();
       });

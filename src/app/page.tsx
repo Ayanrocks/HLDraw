@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { get, set } from "idb-keyval";
 import TopBar from "@/components/TopBar";
@@ -27,6 +27,9 @@ export default function Home() {
   const [selectedElements, setSelectedElements] = useState<readonly ExcalidrawElement[]>([]);
   const [elements, setElements] = useState<readonly ExcalidrawElement[]>([]);
   const [simulationError, setSimulationError] = useState<string | null>(null);
+
+  // Snapshot of element IDs when simulation starts — used to detect structural modifications
+  const simulationSnapshotRef = useRef<Set<string> | null>(null);
 
   // Excalidraw API and Persistence state
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
@@ -90,7 +93,25 @@ export default function Home() {
     }
   }, [appState, isLoaded]);
 
-  // When simulation starts, validate DAG
+  // Auto-stop simulation when structural changes are detected on the canvas
+  useEffect(() => {
+    if (!isSimulating || !simulationSnapshotRef.current) return;
+
+    const snapshot = simulationSnapshotRef.current;
+    const currentIds = new Set(
+      elements.filter(el => !el.isDeleted).map(el => el.id)
+    );
+
+    // Detect added or removed elements
+    const hasAdded = [...currentIds].some(id => !snapshot.has(id));
+    const hasRemoved = [...snapshot].some(id => !currentIds.has(id));
+
+    if (hasAdded || hasRemoved) {
+      setIsSimulating(false);
+    }
+  }, [isSimulating, elements]);
+
+  // When simulation starts, validate DAG and take element snapshot
   useEffect(() => {
     if (isSimulating) {
       const graph = parseGraph(elements);
@@ -118,6 +139,7 @@ export default function Home() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         setSimulationError(error || "Invalid Architecture");
         setIsSimulating(false);
+        simulationSnapshotRef.current = null;
         if (errorNodes && errorNodes.length > 0 && excalidrawAPI) {
           const selectedElementIds: Record<string, true> = {};
           
@@ -148,10 +170,14 @@ export default function Home() {
         }
       } else {
         setSimulationError(null);
-        // Simulation engine tick goes here
+        // Take a snapshot of current element IDs for structural change detection
+        simulationSnapshotRef.current = new Set(
+          elements.filter(el => !el.isDeleted).map(el => el.id)
+        );
       }
     } else {
       setSimulationError(null);
+      simulationSnapshotRef.current = null;
     }
   }, [isSimulating, elements, excalidrawAPI]);
 
