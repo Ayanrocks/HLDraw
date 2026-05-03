@@ -24,6 +24,9 @@ export default function TopBar({
         <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full font-medium">
           Architecture Simulator
         </span>
+        <span className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded-full font-medium">
+          BETA
+        </span>
       </div>
 
       {simulationError && (
@@ -52,8 +55,8 @@ export default function TopBar({
         <button
           onClick={() => setIsSimulating(!isSimulating)}
           className={`px-6 py-2 rounded-lg font-semibold transition-all duration-200 shadow-lg flex items-center gap-2 ${isSimulating
-              ? "bg-red-500 hover:bg-red-600 shadow-red-500/20 text-white"
-              : "bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20 text-white"
+            ? "bg-red-500 hover:bg-red-600 shadow-red-500/20 text-white"
+            : "bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20 text-white"
             }`}
         >
           {isSimulating ? (

@@ -10,6 +10,29 @@ export interface NodeMetrics {
   incoming: number;
   processed: number;
   dropped: number;
+  /** Number of replicas for this node (defaults to 1) */
+  replicas: number;
+  /** Incoming RPS divided across replicas (incoming / replicas) */
+  perReplicaIncoming: number;
+  /** Effective max capacity after replica scaling */
+  effectiveCapacity: number;
+}
+
+/**
+ * Resolves the total effective capacity of a node by multiplying
+ * its per-instance maxCapacity by its replica count.
+ *
+ * @returns Effective capacity in RPS, or Infinity for uncapped nodes.
+ */
+export function resolveEffectiveCapacity(
+  maxCapacityRaw: unknown,
+  replicasRaw: unknown
+): number {
+  const perInstance = Number(maxCapacityRaw) || Infinity;
+  const replicas = Math.max(1, Math.floor(Number(replicasRaw) || 1));
+
+  if (!isFinite(perInstance)) return Infinity;
+  return perInstance * replicas;
 }
 
 export function computeSimulationFrame(
@@ -21,7 +44,24 @@ export function computeSimulationFrame(
 
   // Initialize metrics for all nodes
   for (const nodeId of graph.nodes.keys()) {
-    metrics[nodeId] = { incoming: 0, processed: 0, dropped: 0 };
+    const node = graph.nodes.get(nodeId)!;
+    const replicas = Math.max(
+      1,
+      Math.floor(Number(node.customData.replicas) || 1)
+    );
+    const effectiveCapacity = resolveEffectiveCapacity(
+      node.customData.maxCapacity,
+      node.customData.replicas
+    );
+
+    metrics[nodeId] = {
+      incoming: 0,
+      processed: 0,
+      dropped: 0,
+      replicas,
+      perReplicaIncoming: 0,
+      effectiveCapacity,
+    };
   }
 
   // Inject load into Clients and components with sourceRps
@@ -48,7 +88,7 @@ export function computeSimulationFrame(
 
     const currentMetrics = metrics[nodeId];
     const componentType = node.customData.componentType || "";
-    const maxCapacity = Number(node.customData.maxCapacity) || Infinity;
+    const effectiveCapacity = currentMetrics.effectiveCapacity;
 
     // Process capacity limits — clients have no limits
     if (isClientType(componentType)) {
@@ -56,13 +96,25 @@ export function computeSimulationFrame(
       currentMetrics.dropped = 0;
     } else {
       const sourceTraffic = Number(node.customData.sourceRps) || 0;
-      const externalIncoming = Math.max(0, currentMetrics.incoming - sourceTraffic);
+      const externalIncoming = Math.max(
+        0,
+        currentMetrics.incoming - sourceTraffic
+      );
       
-      const externalProcessed = Math.min(externalIncoming, maxCapacity);
+      const externalProcessed = Math.min(externalIncoming, effectiveCapacity);
       
       currentMetrics.processed = externalProcessed + sourceTraffic;
-      currentMetrics.dropped = Math.max(0, externalIncoming - maxCapacity);
+      currentMetrics.dropped = Math.max(
+        0,
+        externalIncoming - effectiveCapacity
+      );
     }
+
+    // Compute per-replica incoming
+    currentMetrics.perReplicaIncoming =
+      currentMetrics.replicas > 1
+        ? currentMetrics.incoming / currentMetrics.replicas
+        : currentMetrics.incoming;
 
     const outgoingEdges = node.outgoingEdges;
     if (outgoingEdges.length === 0) continue;
@@ -105,3 +157,4 @@ export function computeSimulationFrame(
 
   return metrics;
 }
+

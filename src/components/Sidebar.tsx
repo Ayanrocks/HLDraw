@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 import type { NodeMetrics } from "@/lib/simulation/SimulationEngine";
@@ -33,6 +33,22 @@ const GROUPED_COMPONENTS = getComponentsByCategory();
 export default function Sidebar({ elements, selectedElements, setElements, excalidrawAPI, metrics = {} }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<"Properties" | "Metrics">("Properties");
 
+  // Local string state for the replicas input so users can clear and retype.
+  // Synced from customData when the selected node changes or +/- buttons modify it.
+  const selectedNodeId = selectedElements.length > 0 ? selectedElements[0].id : null;
+  const selectedCustomData = selectedElements.length > 0
+    ? (selectedElements[0].customData as ComponentCustomData) || {}
+    : {};
+  const externalReplicas = selectedCustomData.replicas;
+
+  const [replicasInput, setReplicasInput] = useState<string>(
+    String(externalReplicas ?? 1)
+  );
+
+  useEffect(() => {
+    setReplicasInput(String(externalReplicas ?? 1));
+  }, [selectedNodeId, externalReplicas]);
+
   if (selectedElements.length === 0) {
     return (
       <aside className="w-80 bg-[#1a1a1a] border-l border-[#2a2a2a] p-6 flex flex-col">
@@ -56,8 +72,10 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
 
   // Compute load percentage from live metrics
   const maxCap = customData.maxCapacity || instanceInfo?.maxCapacity || 0;
-  const loadPercent = maxCap > 0
-    ? Math.min(100, (liveMetrics.incoming / maxCap) * 100)
+  const replicas = Math.max(1, Math.floor(Number(customData.replicas) || 1));
+  const effectiveCapacity = maxCap * replicas;
+  const loadPercent = effectiveCapacity > 0
+    ? Math.min(100, (liveMetrics.incoming / effectiveCapacity) * 100)
     : 0;
 
   const updateCustomData = (updates: Partial<ComponentCustomData>) => {
@@ -256,6 +274,59 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   <p className="text-xs text-gray-500 mt-1">Generates its own traffic independent of global RPS.</p>
                 </div>
 
+                {!isClient && (
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Replicas</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-indigo-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          const current = Math.max(1, Math.floor(Number(customData.replicas) || 1));
+                          if (current > 1) updateCustomData({ replicas: current - 1 });
+                        }}
+                        disabled={!customData.replicas || customData.replicas <= 1}
+                        aria-label="Decrease replicas"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        className="flex-1 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white text-center font-mono focus:outline-none focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={replicasInput}
+                        onChange={(e) => setReplicasInput(e.target.value)}
+                        onBlur={() => {
+                          const val = parseInt(replicasInput, 10);
+                          if (!isNaN(val) && val >= 1 && val <= 100) {
+                            updateCustomData({ replicas: val });
+                          } else {
+                            updateCustomData({ replicas: 1 });
+                            setReplicasInput("1");
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                      />
+                      <button
+                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-indigo-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          const current = Math.max(1, Math.floor(Number(customData.replicas) || 1));
+                          if (current < 100) updateCustomData({ replicas: current + 1 });
+                        }}
+                        disabled={customData.replicas !== undefined && customData.replicas >= 100}
+                        aria-label="Increase replicas"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Horizontal scaling — multiplies capacity.</p>
+                  </div>
+                )}
+
                 {isLBType && (
                   <div>
                     <label className="block text-sm text-gray-300 mb-1">Routing Strategy</label>
@@ -284,8 +355,20 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                     <span className="text-cyan-300 font-mono text-sm">{instanceInfo.instanceName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-400 text-sm">Max RPS</span>
+                    <span className="text-gray-400 text-sm">Per-Instance RPS</span>
                     <span className="text-cyan-300 font-mono text-sm">{instanceInfo.maxCapacity.toLocaleString()}</span>
+                  </div>
+                  {replicas > 1 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 text-sm">Replicas</span>
+                      <span className="text-indigo-400 font-mono text-sm font-bold">×{replicas}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">{replicas > 1 ? 'Effective Capacity' : 'Max RPS'}</span>
+                    <span className={`font-mono text-sm ${replicas > 1 ? 'text-indigo-300 font-bold' : 'text-cyan-300'}`}>
+                      {effectiveCapacity.toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400 text-sm">Load</span>
@@ -326,18 +409,32 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   {liveMetrics.dropped.toFixed(0)}
                 </span>
               </div>
-              {maxCap > 0 && (
+              {replicas > 1 && liveMetrics.incoming > 0 && (
+                <div className="mt-3 pt-3 border-t border-[#3a3a3a]">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-400 text-xs uppercase">Per-Replica Load</span>
+                    <span className="text-xs font-mono text-indigo-400">
+                      ~{Math.round(liveMetrics.incoming / replicas).toLocaleString()} RPS
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-xs">Replicas</span>
+                    <span className="text-xs font-mono text-indigo-300 font-bold">×{replicas}</span>
+                  </div>
+                </div>
+              )}
+              {effectiveCapacity > 0 && (
                 <div className="mt-4 pt-3 border-t border-[#3a3a3a]">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-gray-400 text-xs uppercase">Resource Usage</span>
-                    <span className={`text-xs font-mono ${liveMetrics.processed >= maxCap ? 'text-red-400' : 'text-green-400'}`}>
-                      {Math.min(100, (liveMetrics.processed / maxCap) * 100).toFixed(1)}%
+                    <span className={`text-xs font-mono ${liveMetrics.processed >= effectiveCapacity ? 'text-red-400' : 'text-green-400'}`}>
+                      {Math.min(100, (liveMetrics.processed / effectiveCapacity) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="w-full bg-[#111] rounded-full h-1.5 overflow-hidden">
                     <div
-                      className={`h-full ${liveMetrics.processed >= maxCap ? 'bg-red-500' : 'bg-green-500'}`}
-                      style={{ width: `${Math.min(100, (liveMetrics.processed / maxCap) * 100)}%` }}
+                      className={`h-full ${liveMetrics.processed >= effectiveCapacity ? 'bg-red-500' : 'bg-green-500'}`}
+                      style={{ width: `${Math.min(100, (liveMetrics.processed / effectiveCapacity) * 100)}%` }}
                     ></div>
                   </div>
                 </div>

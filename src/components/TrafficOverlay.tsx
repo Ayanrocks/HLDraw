@@ -59,13 +59,16 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
         if (!nodeMetrics) return;
 
         const maxCapacity = Number(el.customData?.maxCapacity) || Infinity;
-        if (maxCapacity === Infinity && nodeMetrics.incoming === 0) return;
+        const replicaCount = Math.max(1, Math.floor(Number(el.customData?.replicas) || 1));
+        const effectiveCapacity = isFinite(maxCapacity) ? maxCapacity * replicaCount : Infinity;
+
+        if (effectiveCapacity === Infinity && nodeMetrics.incoming === 0) return;
 
         const isOverloaded = nodeMetrics.dropped > 0;
         let loadPct = 0;
         
-        if (maxCapacity !== Infinity) {
-          loadPct = Math.round((nodeMetrics.incoming / maxCapacity) * 100);
+        if (isFinite(effectiveCapacity) && effectiveCapacity > 0) {
+          loadPct = Math.round((nodeMetrics.incoming / effectiveCapacity) * 100);
         } else if (nodeMetrics.incoming > 0) {
           loadPct = 100; // If infinite capacity but has traffic, just show something or ignore
         }
@@ -117,7 +120,11 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
         ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillText(`${loadPct}% load`, 0, screenH / 2 + 8 * appState.zoom.value);
+
+        const loadLabel = replicaCount > 1
+          ? `${loadPct}% load ×${replicaCount}`
+          : `${loadPct}% load`;
+        ctx.fillText(loadLabel, 0, screenH / 2 + 8 * appState.zoom.value);
 
         ctx.restore();
       });

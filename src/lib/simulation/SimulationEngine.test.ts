@@ -41,12 +41,12 @@ describe("SimulationEngine — Success cases", () => {
       500
     );
 
-    expect(result["client"]).toEqual({
+    expect(result["client"]).toMatchObject({
       incoming: 500,
       processed: 500,
       dropped: 0,
     });
-    expect(result["target"]).toEqual({
+    expect(result["target"]).toMatchObject({
       incoming: 500,
       processed: 500,
       dropped: 0,
@@ -250,8 +250,8 @@ describe("SimulationEngine — Success cases", () => {
 
     const result = computeSimulationFrame(graph, ["a", "b"], 0);
 
-    expect(result["a"]).toEqual({ incoming: 0, processed: 0, dropped: 0 });
-    expect(result["b"]).toEqual({ incoming: 0, processed: 0, dropped: 0 });
+    expect(result["a"]).toMatchObject({ incoming: 0, processed: 0, dropped: 0 });
+    expect(result["b"]).toMatchObject({ incoming: 0, processed: 0, dropped: 0 });
   });
 
   it("handles multi-hop chain correctly — traffic cascades through", () => {
@@ -309,7 +309,7 @@ describe("SimulationEngine — Success cases", () => {
     const result = computeSimulationFrame(graph, [], 1000);
 
     // Node exists but was never visited
-    expect(result["a"]).toEqual({ incoming: 0, processed: 0, dropped: 0 });
+    expect(result["a"]).toMatchObject({ incoming: 0, processed: 0, dropped: 0 });
   });
 
   it("handles unknown component type as a passthrough (no registry match)", () => {
