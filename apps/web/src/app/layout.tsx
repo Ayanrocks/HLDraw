@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import theme from "../config/theme.config.json";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,17 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: `
+          :root {
+            --primary-300: ${theme.colors.primary["300"]};
+            --primary-400: ${theme.colors.primary["400"]};
+            --primary-500: ${theme.colors.primary["500"]};
+            --primary-600: ${theme.colors.primary["600"]};
+            --primary-700: ${theme.colors.primary["700"]};
+          }
+        `}} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

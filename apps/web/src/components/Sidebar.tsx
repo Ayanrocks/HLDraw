@@ -208,7 +208,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
         <button
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
             activeTab === "Properties"
-              ? "text-indigo-400 border-b-2 border-indigo-500 bg-[#222]"
+              ? "text-primary-400 border-b-2 border-primary-500 bg-[#222]"
               : "text-gray-400 hover:text-gray-200 hover:bg-[#222]"
           }`}
           onClick={() => setActiveTab("Properties")}
@@ -218,7 +218,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
         <button
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
             activeTab === "Metrics"
-              ? "text-indigo-400 border-b-2 border-indigo-500 bg-[#222]"
+              ? "text-primary-400 border-b-2 border-primary-500 bg-[#222]"
               : "text-gray-400 hover:text-gray-200 hover:bg-[#222]"
           }`}
           onClick={() => setActiveTab("Metrics")}
@@ -237,7 +237,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   <label className="block text-sm text-gray-300 mb-1">Name</label>
                   <input
                     type="text"
-                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-primary-500"
                     value={customData.name || ""}
                     onChange={handleNameChange}
                     placeholder="e.g. Client 1"
@@ -247,7 +247,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">Component Type</label>
                   <select
-                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-primary-500"
                     value={customData.componentType || ""}
                     onChange={handleComponentTypeChange}
                   >
@@ -267,7 +267,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   <input
                     type="number"
                     min="0"
-                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-primary-500"
                     value={customData.sourceRps ?? ""}
                     onChange={(e) => updateCustomData({ sourceRps: e.target.value === "" ? undefined : Number(e.target.value) })}
                     placeholder="e.g. 100 (For disjoint components)"
@@ -280,7 +280,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                     <label className="block text-sm text-gray-300 mb-1">Replicas</label>
                     <div className="flex items-center gap-2">
                       <button
-                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-indigo-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-primary-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
                         onClick={() => {
                           const current = Math.max(1, Math.floor(Number(customData.replicas) || 1));
                           if (current > 1) updateCustomData({ replicas: current - 1 });
@@ -294,7 +294,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                         type="number"
                         min="1"
                         max="100"
-                        className="flex-1 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white text-center font-mono focus:outline-none focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="flex-1 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white text-center font-mono focus:outline-none focus:border-primary-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         value={replicasInput}
                         onChange={(e) => setReplicasInput(e.target.value)}
                         onBlur={() => {
@@ -313,7 +313,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                         }}
                       />
                       <button
-                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-indigo-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="w-8 h-8 bg-[#2a2a2a] border border-[#3a3a3a] rounded-md text-white hover:bg-[#3a3a3a] hover:border-primary-500 transition-colors flex items-center justify-center text-lg font-medium disabled:opacity-30 disabled:cursor-not-allowed"
                         onClick={() => {
                           const current = Math.max(1, Math.floor(Number(customData.replicas) || 1));
                           if (current < 100) updateCustomData({ replicas: current + 1 });
@@ -332,7 +332,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   <div>
                     <label className="block text-sm text-gray-300 mb-1">Routing Strategy</label>
                     <select
-                      className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-md px-3 py-2 text-white focus:outline-none focus:border-primary-500"
                       value={customData.lbStrategy || "Round Robin"}
                       onChange={(e) => updateCustomData({ lbStrategy: e.target.value })}
                     >
@@ -362,12 +362,12 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                   {replicas > 1 && (
                     <div className="flex justify-between">
                       <span className="text-gray-400 text-sm">Replicas</span>
-                      <span className="text-indigo-400 font-mono text-sm font-bold">×{replicas}</span>
+                      <span className="text-primary-400 font-mono text-sm font-bold">×{replicas}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span className="text-gray-400 text-sm">{replicas > 1 ? 'Effective Capacity' : 'Max RPS'}</span>
-                    <span className={`font-mono text-sm ${replicas > 1 ? 'text-indigo-300 font-bold' : 'text-cyan-300'}`}>
+                    <span className={`font-mono text-sm ${replicas > 1 ? 'text-primary-300 font-bold' : 'text-cyan-300'}`}>
                       {effectiveCapacity.toLocaleString()}
                     </span>
                   </div>
@@ -398,7 +398,7 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
             <div className={`bg-[#222] border ${liveMetrics.dropped > 0 ? "border-red-500/50" : "border-[#3a3a3a]"} rounded-lg p-4 space-y-3 transition-colors duration-300`}>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Incoming RPS</span>
-                <span className="font-mono text-indigo-400">{liveMetrics.incoming.toFixed(0)}</span>
+                <span className="font-mono text-primary-400">{liveMetrics.incoming.toFixed(0)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Processed RPS</span>
@@ -414,13 +414,13 @@ export default function Sidebar({ elements, selectedElements, setElements, excal
                 <div className="mt-3 pt-3 border-t border-[#3a3a3a]">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-gray-400 text-xs uppercase">Per-Replica Load</span>
-                    <span className="text-xs font-mono text-indigo-400">
+                    <span className="text-xs font-mono text-primary-400">
                       ~{Math.round(liveMetrics.incoming / replicas).toLocaleString()} RPS
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400 text-xs">Replicas</span>
-                    <span className="text-xs font-mono text-indigo-300 font-bold">×{replicas}</span>
+                    <span className="text-xs font-mono text-primary-300 font-bold">×{replicas}</span>
                   </div>
                 </div>
               )}

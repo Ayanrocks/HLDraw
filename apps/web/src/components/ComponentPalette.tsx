@@ -240,8 +240,8 @@ export default function ComponentPalette({
           transition-all duration-200
           ${
             isOpen
-              ? "bg-indigo-600 text-white shadow-indigo-500/30"
-              : "bg-[#232323] text-gray-200 border border-[#3a3a3a] hover:bg-[#2a2a2a] hover:border-indigo-500/40 shadow-black/30"
+              ? "bg-primary-600 text-white shadow-primary-500/30"
+              : "bg-[#232323] text-gray-200 border border-[#3a3a3a] hover:bg-[#2a2a2a] hover:border-primary-500/40 shadow-black/30"
           }
         `}
         title="System Design Components"
@@ -273,7 +273,7 @@ export default function ComponentPalette({
               placeholder="Search components..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#2a2a2a] border border-[#3a3a3a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
               autoFocus
             />
           </div>
@@ -300,7 +300,7 @@ export default function ComponentPalette({
                         <button
                           key={key}
                           onClick={() => insertComponent(key)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-gray-200 hover:bg-indigo-600/20 hover:text-white transition-colors group"
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-gray-200 hover:bg-primary-600/20 hover:text-white transition-colors group"
                           title={def.description}
                         >
                           <ShapeIcon shape={shape} />
@@ -325,7 +325,7 @@ export default function ComponentPalette({
  */
 function ShapeIcon({ shape }: { shape: string }) {
   const cls =
-    "w-5 h-5 flex-shrink-0 text-gray-500 group-hover:text-indigo-400 transition-colors";
+    "w-5 h-5 flex-shrink-0 text-gray-500 group-hover:text-primary-400 transition-colors";
 
   switch (shape) {
     case "ellipse":
