@@ -20,6 +20,9 @@ interface ErrorParticle {
   maxLife: number;
 }
 
+/** Hard cap on simultaneous error particles to prevent memory bloat */
+const MAX_ERROR_PARTICLES = 100;
+
 export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }: TrafficOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const errorParticlesRef = useRef<ErrorParticle[]>([]);
@@ -51,7 +54,6 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
       lastTimeRef.current = time;
 
       // Filter dead particles and enforce hard cap to prevent memory bloat
-      const MAX_ERROR_PARTICLES = 100;
       errorParticlesRef.current = errorParticlesRef.current.filter(p => p.life > 0);
       if (errorParticlesRef.current.length > MAX_ERROR_PARTICLES) {
         errorParticlesRef.current = errorParticlesRef.current.slice(-MAX_ERROR_PARTICLES);

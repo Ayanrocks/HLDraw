@@ -43,8 +43,12 @@ func NewServer(cfg *config.Config, database db.Database) Server {
 	router.GET("/health", healthHandler.Check)
 
 	httpSrv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	return &server{

@@ -41,7 +41,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <style dangerouslySetInnerHTML={{ __html: `
+        <style>{`
           :root {
             --primary-300: ${theme.colors.primary["300"]};
             --primary-400: ${theme.colors.primary["400"]};
@@ -59,7 +59,7 @@ export default function RootLayout({
             --accent-600: ${theme.colors.accent["600"]};
             --accent-700: ${theme.colors.accent["700"]};
           }
-        `}} />
+        `}</style>
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

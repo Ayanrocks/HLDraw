@@ -13,6 +13,9 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import TrafficOverlay from "@/components/TrafficOverlay";
 import { startCleanupService, stopCleanupService } from "@/lib/cache/CacheCleanupService";
 
+/** Debounce interval (ms) for persisting elements/appState to IndexedDB */
+const DEBOUNCE_TIMEOUT_MS = 500;
+
 // Dynamic import for Excalidraw to prevent SSR issues
 const ExcalidrawWrapper = dynamic(() => import("@/components/ExcalidrawWrapper"), {
   ssr: false,
@@ -102,7 +105,7 @@ export default function Home() {
 
     persistTimerRef.current = setTimeout(() => {
       persistElements(elements);
-    }, 500);
+    }, DEBOUNCE_TIMEOUT_MS);
 
     return () => {
       if (persistTimerRef.current) {
@@ -123,7 +126,7 @@ export default function Home() {
 
     appStatePersistTimerRef.current = setTimeout(() => {
       set("hlDraw-appState", appState).catch(console.error);
-    }, 500);
+    }, DEBOUNCE_TIMEOUT_MS);
 
     return () => {
       if (appStatePersistTimerRef.current) {

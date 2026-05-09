@@ -2,12 +2,16 @@ package db
 
 import (
 	"context"
-	"fmt"
+	"net/url"
+	"time"
 
 	"github.com/ayanrocks/hlDraw/backend/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 )
+
+// pingTimeout is the maximum time to wait for the initial database ping.
+const pingTimeout = 5 * time.Second
 
 // Database defines the interface for database operations
 type Database interface {
@@ -20,19 +24,25 @@ type postgresDB struct {
 	pool *pgxpool.Pool
 }
 
-// BuildConnectionURL constructs a PostgreSQL connection string from the provided configuration
+// BuildConnectionURL constructs a PostgreSQL connection string from the
+// provided configuration using net/url to safely encode credentials.
 func BuildConnectionURL(cfg *config.Config) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		cfg.DB.User,
-		cfg.DB.Password,
-		cfg.DB.Host,
-		cfg.DB.Port,
-		cfg.DB.DBName,
-		cfg.DB.SSLMode,
-	)
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(cfg.DB.User, cfg.DB.Password),
+		Host:   cfg.DB.Host + ":" + cfg.DB.Port,
+		Path:   "/" + cfg.DB.DBName,
+	}
+
+	query := url.Values{}
+	query.Set("sslmode", cfg.DB.SSLMode)
+	u.RawQuery = query.Encode()
+
+	return u.String()
 }
 
-// NewPostgresDB creates a new PostgreSQL database connection
+// NewPostgresDB creates a new PostgreSQL database connection.
+// The initial ping uses a bounded timeout to avoid blocking indefinitely.
 func NewPostgresDB(ctx context.Context, cfg *config.Config) (Database, error) {
 	dbURL := BuildConnectionURL(cfg)
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -40,7 +50,10 @@ func NewPostgresDB(ctx context.Context, cfg *config.Config) (Database, error) {
 		return nil, err
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+
+	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
 		return nil, err
 	}

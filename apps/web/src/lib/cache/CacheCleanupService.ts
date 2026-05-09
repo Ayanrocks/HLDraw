@@ -29,19 +29,25 @@ const PROTECTED_KEYS = new Set([
 /** Maximum age (ms) for a cache entry before it's evicted — 24 hours */
 const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** Maximum number of graph cache entries to retain */
+/** Maximum number of graph cache entries to retain (excluding the main-graph) */
 const MAX_GRAPH_CACHE_ENTRIES = 5;
 
 /** How often the cleanup cycle runs (ms) — every 5 minutes */
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Maximum size (KB) for the main graph cache before it's considered corrupt */
+const CACHE_SIZE_THRESHOLD_KB = 5120;
 
 // ---------------------------------------------------------------------------
 // Cleanup functions
 // ---------------------------------------------------------------------------
 
 /**
- * Removes all IndexedDB entries that match known cache prefixes
+ * Removes stale and excess IndexedDB entries that match known cache prefixes
  * but are NOT in the protected set.
+ *
+ * Enforces both time-based (MAX_CACHE_AGE_MS) and count-based
+ * (MAX_GRAPH_CACHE_ENTRIES) retention policies.
  *
  * @returns Number of entries evicted.
  */
@@ -51,19 +57,51 @@ export async function evictStaleCacheEntries(): Promise<number> {
   try {
     const allKeys = await keys();
 
+    // Collect graph cache entries with their timestamps for age/count eviction
+    const graphEntries: { key: IDBValidKey; lastUpdated: number }[] = [];
+
     for (const key of allKeys) {
       const keyStr = String(key);
 
       // Never touch protected user data
       if (PROTECTED_KEYS.has(keyStr)) continue;
 
-      // Evict graph cache entries beyond the retention limit
       if (keyStr.startsWith(GRAPH_CACHE_PREFIX)) {
-        // Keep only the "main-graph" entry; evict anything else
-        if (keyStr !== `${GRAPH_CACHE_PREFIX}main-graph`) {
+        // Always retain the main-graph entry (handled separately below)
+        if (keyStr === `${GRAPH_CACHE_PREFIX}main-graph`) continue;
+
+        // Attempt to read timestamp from the cached value
+        let lastUpdated = 0;
+        try {
+          const entry = await get(key);
+          if (entry && typeof entry === "object" && typeof entry.lastUpdated === "number") {
+            lastUpdated = entry.lastUpdated;
+          } else if (entry && typeof entry === "object" && typeof entry.timestamp === "number") {
+            lastUpdated = entry.timestamp;
+          }
+        } catch {
+          // If we can't read, treat as oldest
+        }
+
+        // Evict entries older than MAX_CACHE_AGE_MS
+        const age = Date.now() - lastUpdated;
+        if (lastUpdated > 0 && age > MAX_CACHE_AGE_MS) {
           await del(key);
           evicted++;
+          continue;
         }
+
+        graphEntries.push({ key, lastUpdated });
+      }
+    }
+
+    // Count-based eviction: keep up to MAX_GRAPH_CACHE_ENTRIES (newest first)
+    if (graphEntries.length > MAX_GRAPH_CACHE_ENTRIES) {
+      graphEntries.sort((a, b) => b.lastUpdated - a.lastUpdated);
+      const toEvict = graphEntries.slice(MAX_GRAPH_CACHE_ENTRIES);
+      for (const entry of toEvict) {
+        await del(entry.key);
+        evicted++;
       }
     }
   } catch (error) {
@@ -89,10 +127,9 @@ export async function trimGraphCache(): Promise<boolean> {
     const serialized = JSON.stringify(graph);
     const sizeKB = serialized.length / 1024;
 
-    if (sizeKB > 5120) {
-      // > 5MB is suspicious for a graph cache
+    if (sizeKB > CACHE_SIZE_THRESHOLD_KB) {
       console.warn(
-        `[CacheCleanup] Graph cache is ${sizeKB.toFixed(0)}KB — evicting as potential corruption.`
+        `[CacheCleanup] Graph cache is ${sizeKB.toFixed(0)}KB (threshold: ${CACHE_SIZE_THRESHOLD_KB}KB) — evicting as potential corruption.`
       );
       await del(graphKey);
       return true;

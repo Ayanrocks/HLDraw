@@ -1,8 +1,8 @@
+# HLDraw
+
 <div align="center">
   <img src="./apps/web/public/logo.png" alt="HLDraw Logo" width="200" />
-  
-  # HLDraw
-  
+
   **A Modern System Design and Architecture Diagramming Tool with Live Traffic Simulation**
 </div>
 

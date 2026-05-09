@@ -20,6 +20,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 12. Do not use absolute paths, use relative paths
 13. Do not use any hardcoded values, use constants
 14. Always sanitize Excalidraw element properties (x, y, width, height) to ensure they are valid finite numbers before updating the scene or saving to state, as NaN or extremely large values will crash the Excalidraw rendering engine with a 'Canvas exceeds max size' error.
-15. In Golang, ALways follow the standard library patterns, do not reinvent the wheel, do not use any third party libraries unless needed.
-16. Always use the stanard folder structure and the idioms
+15. In Golang, Always follow the standard library patterns, do not reinvent the wheel, do not use any third-party libraries unless needed.
+16. Always use the standard folder structure and the idioms
 17. We're going to be as close to OOP as possible so don't be afraid to use interfaces, abstraction, etc. Use them heavily whenever appropriate.
