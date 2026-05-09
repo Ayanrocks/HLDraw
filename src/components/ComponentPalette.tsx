@@ -117,6 +117,30 @@ const CATEGORY_ICONS: Record<ComponentCategory, React.ReactNode> = {
 /** Pre-compute grouped components */
 const GROUPED = getComponentsByCategory();
 
+/**
+ * Returns shape styles (colors) for a given component category.
+ */
+function getShapeStyles(category: ComponentCategory): { backgroundColor: string; strokeColor: string } {
+  switch (category) {
+    case "Clients":
+      return { backgroundColor: "#e0f2fe", strokeColor: "#0284c7" }; // Sky
+    case "Compute":
+      return { backgroundColor: "#ffedd5", strokeColor: "#ea580c" }; // Orange
+    case "Databases":
+      return { backgroundColor: "#fef9c3", strokeColor: "#16a34a" }; // Yellow, Green stroke
+    case "Storage":
+      return { backgroundColor: "#dcfce7", strokeColor: "#15803d" }; // Green
+    case "Networking":
+      return { backgroundColor: "#f3e8ff", strokeColor: "#9333ea" }; // Purple
+    case "Messaging":
+      return { backgroundColor: "#fee2e2", strokeColor: "#dc2626" }; // Red
+    case "Security":
+      return { backgroundColor: "#fce7f3", strokeColor: "#db2777" }; // Pink
+    default:
+      return { backgroundColor: "#f3f4f6", strokeColor: "#4b5563" }; // Gray
+  }
+}
+
 export default function ComponentPalette({
   excalidrawAPI,
   elements,
@@ -145,6 +169,9 @@ export default function ComponentPalette({
       const appState = excalidrawAPI.getAppState();
       const shapeType = getShapeType(componentKey);
       const { width, height } = getDimensions(shapeType);
+      
+      const category = COMPONENT_REGISTRY[componentKey]?.category || "Compute";
+      const { backgroundColor, strokeColor } = getShapeStyles(category);
 
       // Place shape at the center of the current viewport
       const centerX =
@@ -159,8 +186,9 @@ export default function ComponentPalette({
           y: centerY,
           width,
           height,
-          strokeColor: "#1e1e1e",
-          backgroundColor: "transparent",
+          strokeColor,
+          backgroundColor,
+          fillStyle: "solid",
           label: {
             text: componentKey,
           },
