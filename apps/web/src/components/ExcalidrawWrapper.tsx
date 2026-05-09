@@ -85,11 +85,20 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
     }
 
     let needsUpdate = false;
-    let newElementsToUpdate = [...excalidrawElements];
+    // Defer array copy until we know a mutation is needed to reduce GC pressure
+    let newElementsToUpdate: ExcalidrawElement[] | null = null;
+
+    const getOrCreateMutableElements = (): ExcalidrawElement[] => {
+      if (!newElementsToUpdate) {
+        newElementsToUpdate = [...excalidrawElements];
+      }
+      return newElementsToUpdate;
+    };
 
     // Pass 1: Mark text elements and connected arrows as deleted if their parent is deleted
     if (newlyDeletedIds.size > 0) {
-      newElementsToUpdate = newElementsToUpdate.map(el => {
+      const mutable = getOrCreateMutableElements();
+      newElementsToUpdate = mutable.map(el => {
         if (el.isDeleted) return el;
         
         // Delete bound text when its container is deleted
@@ -125,12 +134,13 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
       appState.newElement !== null;
 
     if (!isInteracting) {
-      const bindableShapes = newElementsToUpdate.filter(el => 
+      const sourceElements = newElementsToUpdate ?? excalidrawElements;
+      const bindableShapes = sourceElements.filter(el => 
         !el.isDeleted && 
         el.type !== "arrow" && el.type !== "text" && el.type !== "freedraw" && el.type !== "line"
       );
 
-      newElementsToUpdate = newElementsToUpdate.map(el => {
+      const mapped = sourceElements.map(el => {
         if (el.isDeleted || el.type !== "arrow") return el;
         
         const arrow = el as unknown as ExcalidrawArrowElement;
@@ -186,11 +196,34 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
         
         return el;
       });
+
+      if (needsUpdate) {
+        newElementsToUpdate = mapped as ExcalidrawElement[];
+      }
     }
 
-    if (needsUpdate && apiRef.current) {
+    if (needsUpdate && apiRef.current && newElementsToUpdate) {
+      // Sanitize geometry to prevent NaN / extreme values crashing Excalidraw (AGENTS.md rule #14)
+      const MAX_COORD = 1e6;
+      const DEFAULT_DIMENSION = 10;
+      const sanitized = newElementsToUpdate.map(el => {
+        const x = Number.isFinite(el.x) ? Math.max(-MAX_COORD, Math.min(MAX_COORD, el.x)) : 0;
+        const y = Number.isFinite(el.y) ? Math.max(-MAX_COORD, Math.min(MAX_COORD, el.y)) : 0;
+        const width = (Number.isFinite(el.width) && el.width > 0)
+          ? Math.min(MAX_COORD, el.width)
+          : DEFAULT_DIMENSION;
+        const height = (Number.isFinite(el.height) && el.height > 0)
+          ? Math.min(MAX_COORD, el.height)
+          : DEFAULT_DIMENSION;
+
+        if (x !== el.x || y !== el.y || width !== el.width || height !== el.height) {
+          return { ...el, x, y, width, height };
+        }
+        return el;
+      });
+
       // Update scene to mark relationships and text as deleted too
-      apiRef.current.updateScene({ elements: newElementsToUpdate });
+      apiRef.current.updateScene({ elements: sanitized });
       return; // Wait for the subsequent onChange to update state
     }
 

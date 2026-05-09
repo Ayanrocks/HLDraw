@@ -20,6 +20,9 @@ interface ErrorParticle {
   maxLife: number;
 }
 
+/** Hard cap on simultaneous error particles to prevent memory bloat */
+const MAX_ERROR_PARTICLES = 100;
+
 export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }: TrafficOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const errorParticlesRef = useRef<ErrorParticle[]>([]);
@@ -50,8 +53,11 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
       const dt = time - lastTimeRef.current;
       lastTimeRef.current = time;
 
-      // Filter dead particles
+      // Filter dead particles and enforce hard cap to prevent memory bloat
       errorParticlesRef.current = errorParticlesRef.current.filter(p => p.life > 0);
+      if (errorParticlesRef.current.length > MAX_ERROR_PARTICLES) {
+        errorParticlesRef.current = errorParticlesRef.current.slice(-MAX_ERROR_PARTICLES);
+      }
 
       // Draw component overlays (highlights and watermarks)
       elements.forEach((el: ExcalidrawElement) => {
@@ -264,7 +270,11 @@ export default function TrafficOverlay({ isSimulating, excalidrawAPI, metrics }:
 
     animate();
 
-    return () => cancelAnimationFrame(animationId);
+    return () => {
+      cancelAnimationFrame(animationId);
+      // Clear particle data to release memory between simulation sessions
+      errorParticlesRef.current = [];
+    };
   }, [isSimulating, excalidrawAPI, metrics]);
 
   if (!isSimulating) return null;

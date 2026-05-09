@@ -18,10 +18,10 @@ export default function TopBar({
   return (
     <header className="flex items-center justify-between px-6 py-3 bg-[#1e1e1e] border-b border-[#2a2a2a] shadow-sm">
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
+        <h1 className="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-500 bg-clip-text text-transparent">
           HLDraw
         </h1>
-        <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full font-medium">
+        <span className="text-xs px-2 py-1 bg-primary-500/20 text-primary-300 rounded-full font-medium">
           Architecture Simulator
         </span>
         <span className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded-full font-medium">
@@ -48,7 +48,7 @@ export default function TopBar({
             step="10"
             value={globalRps}
             onChange={(e) => setGlobalRps(parseInt(e.target.value))}
-            className="w-32 accent-indigo-500 cursor-pointer"
+            className="w-32 accent-primary-500 cursor-pointer"
           />
         </div>
 
@@ -56,7 +56,7 @@ export default function TopBar({
           onClick={() => setIsSimulating(!isSimulating)}
           className={`px-6 py-2 rounded-lg font-semibold transition-all duration-200 shadow-lg flex items-center gap-2 ${isSimulating
             ? "bg-red-500 hover:bg-red-600 shadow-red-500/20 text-white"
-            : "bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20 text-white"
+            : "bg-primary-500 hover:bg-primary-600 shadow-primary-500/20 text-secondary-700"
             }`}
         >
           {isSimulating ? (
