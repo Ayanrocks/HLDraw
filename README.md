@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <img src="./apps/web/public/logo.png" alt="HLDraw Logo" width="200" />
+  
+  # HLDraw
+  
+  **A Modern System Design and Architecture Diagramming Tool with Live Traffic Simulation**
+</div>
 
-## Getting Started
+## Overview
 
-First, run the development server:
+HLDraw is a powerful, Excalidraw-based system design and architecture diagramming platform. Beyond simple diagramming, HLDraw features a built-in traffic simulation engine that allows you to model request flows, visualize bottlenecks, and test horizontal autoscaling configurations directly on your canvas.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Intuitive Diagramming**: Built on Excalidraw for a familiar, fluid drawing experience.
+- **Custom System Components**: Native components (Databases, Load Balancers, Queues, Clouds) specifically tailored for architecture design.
+- **Live Traffic Simulation**: Define source RPS (Requests Per Second) and visualize load distribution across your entire architecture.
+- **Horizontal Autoscaling**: Simulate adding replicas to components and watch how it affects load capacity in real-time.
+- **Smart Magnetic Arrows**: Arrows intelligently snap and stick to components, even after deletions or movements.
+- **Dark & Light Themes**: Fully supported theme customization that saves across sessions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project is structured as a monorepo containing:
 
-## Learn More
+- `apps/web`: The Next.js frontend application, featuring the Excalidraw canvas and React-based UI.
+- `apps/backend`: The Golang backend service, built with the Gin framework and PostgreSQL for persistent data storage.
 
-To learn more about Next.js, take a look at the following resources:
+## Installation & Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Prerequisites
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Node.js (v18+)
+- Go (v1.21+)
+- PostgreSQL (for backend data storage)
 
-## Deploy on Vercel
+### Steps
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd hldraw
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Install dependencies:**
+   From the root of the project, run:
+   ```bash
+   npm install
+   ```
+   *This will install dependencies for all workspaces, including the frontend application.*
+
+3. **Backend Setup:**
+   Ensure your PostgreSQL instance is running. Configure your environment variables for the Golang backend (e.g., database credentials):
+   ```bash
+   cd apps/backend
+   go mod download
+   cd ../..
+   ```
+
+4. **Run the development servers:**
+   You can start both the Next.js frontend and the Golang backend concurrently from the root directory:
+   ```bash
+   npm run dev
+   ```
+   
+   Alternatively, you can run them individually:
+   - **Frontend only:** `npm run dev:web`
+   - **Backend only:** `npm run dev:backend`
+
+5. **Access the application:**
+   Open [http://localhost:3000](http://localhost:3000) in your browser to view the frontend.
+
+## Contributing
+
+We welcome contributions to HLDraw! To ensure a smooth process, please adhere to our project guidelines:
+
+1. **Branching**: Use feature branches with descriptive names (e.g., `feat/add-new-node-type`, `fix/arrow-snapping-bug`).
+2. **Commits**: Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format (e.g., `feat:`, `fix:`, `docs:`, `refactor:`).
+3. **Coding Standards**: Ensure code is clean, modular, and adheres to our project's general principles (Single Responsibility Principle, explicit over implicit).
+4. **Testing**: Write unit/E2E tests alongside any new logic, especially for simulation and scaling components.
+5. **Pull Requests**: Open a pull request against the `main` branch, ensuring it is small, focused, and includes a clear description of the changes.
+
+## License
+
+This project is open-source and available under standard open-source licenses. Please refer to the repository files for specific licensing details.
