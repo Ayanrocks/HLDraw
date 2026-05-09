@@ -240,7 +240,7 @@ export default function ComponentPalette({
           transition-all duration-200
           ${
             isOpen
-              ? "bg-primary-600 text-white shadow-primary-500/30"
+              ? "bg-primary-600 text-secondary-700 shadow-primary-500/30"
               : "bg-[#232323] text-gray-200 border border-[#3a3a3a] hover:bg-[#2a2a2a] hover:border-primary-500/40 shadow-black/30"
           }
         `}

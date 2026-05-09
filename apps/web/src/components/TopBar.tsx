@@ -56,7 +56,7 @@ export default function TopBar({
           onClick={() => setIsSimulating(!isSimulating)}
           className={`px-6 py-2 rounded-lg font-semibold transition-all duration-200 shadow-lg flex items-center gap-2 ${isSimulating
             ? "bg-red-500 hover:bg-red-600 shadow-red-500/20 text-white"
-            : "bg-primary-500 hover:bg-primary-600 shadow-primary-500/20 text-white"
+            : "bg-primary-500 hover:bg-primary-600 shadow-primary-500/20 text-secondary-700"
             }`}
         >
           {isSimulating ? (

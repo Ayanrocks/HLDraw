@@ -48,6 +48,16 @@ export default function RootLayout({
             --primary-500: ${theme.colors.primary["500"]};
             --primary-600: ${theme.colors.primary["600"]};
             --primary-700: ${theme.colors.primary["700"]};
+            --secondary-300: ${theme.colors.secondary["300"]};
+            --secondary-400: ${theme.colors.secondary["400"]};
+            --secondary-500: ${theme.colors.secondary["500"]};
+            --secondary-600: ${theme.colors.secondary["600"]};
+            --secondary-700: ${theme.colors.secondary["700"]};
+            --accent-300: ${theme.colors.accent["300"]};
+            --accent-400: ${theme.colors.accent["400"]};
+            --accent-500: ${theme.colors.accent["500"]};
+            --accent-600: ${theme.colors.accent["600"]};
+            --accent-700: ${theme.colors.accent["700"]};
           }
         `}} />
       </head>
