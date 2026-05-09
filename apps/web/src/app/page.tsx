@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { get, set } from "idb-keyval";
 import TopBar from "@/components/TopBar";
@@ -11,6 +11,7 @@ import { useSimulation } from "@/lib/simulation/useSimulation";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import TrafficOverlay from "@/components/TrafficOverlay";
+import { startCleanupService, stopCleanupService } from "@/lib/cache/CacheCleanupService";
 
 // Dynamic import for Excalidraw to prevent SSR issues
 const ExcalidrawWrapper = dynamic(() => import("@/components/ExcalidrawWrapper"), {
@@ -41,6 +42,12 @@ export default function Home() {
 
   const [appState, setAppState] = useState<any>(null);
 
+  // --- Cache cleanup lifecycle ---
+  useEffect(() => {
+    startCleanupService();
+    return () => stopCleanupService();
+  }, []);
+
   useEffect(() => {
     Promise.all([
       get("hlDraw-elements"),
@@ -49,8 +56,10 @@ export default function Home() {
       let safeElements: ExcalidrawElement[] = [];
       if (storedElements && Array.isArray(storedElements)) {
         // Sanitize corrupted elements that might have infinite/NaN bounds
+        // Also strip deleted elements to prevent IndexedDB bloat
         safeElements = storedElements.filter(el =>
-          el && 
+          el &&
+          !el.isDeleted &&
           typeof el.width === 'number' && !isNaN(el.width) && el.width >= 0 && el.width < 50000 &&
           typeof el.height === 'number' && !isNaN(el.height) && el.height >= 0 && el.height < 50000 &&
           typeof el.x === 'number' && !isNaN(el.x) && Math.abs(el.x) < 50000 &&
@@ -74,23 +83,53 @@ export default function Home() {
     });
   }, []);
 
-  // Save to IndexedDB whenever elements change
-  useEffect(() => {
-    if (isLoaded) {
-      set("hlDraw-elements", elements);
-      // Also store the pure graph representation in our DB module
-      const graph = parseGraph(elements);
-      import("@/lib/db/GraphStore").then(({ saveOrUpdateGraph }) => {
-        saveOrUpdateGraph("main-graph", graph).catch(console.error);
-      });
-    }
-  }, [elements, isLoaded]);
+  // --- Debounced persistence to IndexedDB ---
+  // Prevents writes on every keystroke/drag — waits 500ms of inactivity.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Save appState whenever it changes
+  const persistElements = useCallback((els: readonly ExcalidrawElement[]) => {
+    // Strip deleted elements before persisting to save space
+    const liveElements = els.filter(el => !el.isDeleted);
+    set("hlDraw-elements", liveElements).catch(console.error);
+  }, []);
+
   useEffect(() => {
-    if (isLoaded && appState) {
-      set("hlDraw-appState", appState);
+    if (!isLoaded) return;
+
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
     }
+
+    persistTimerRef.current = setTimeout(() => {
+      persistElements(elements);
+    }, 500);
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [elements, isLoaded, persistElements]);
+
+  // Save appState whenever it changes (debounced)
+  const appStatePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !appState) return;
+
+    if (appStatePersistTimerRef.current) {
+      clearTimeout(appStatePersistTimerRef.current);
+    }
+
+    appStatePersistTimerRef.current = setTimeout(() => {
+      set("hlDraw-appState", appState).catch(console.error);
+    }, 500);
+
+    return () => {
+      if (appStatePersistTimerRef.current) {
+        clearTimeout(appStatePersistTimerRef.current);
+      }
+    };
   }, [appState, isLoaded]);
 
   // Auto-stop simulation when structural changes are detected on the canvas

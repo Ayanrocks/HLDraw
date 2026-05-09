@@ -85,11 +85,20 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
     }
 
     let needsUpdate = false;
-    let newElementsToUpdate = [...excalidrawElements];
+    // Defer array copy until we know a mutation is needed to reduce GC pressure
+    let newElementsToUpdate: ExcalidrawElement[] | null = null;
+
+    const getOrCreateMutableElements = (): ExcalidrawElement[] => {
+      if (!newElementsToUpdate) {
+        newElementsToUpdate = [...excalidrawElements];
+      }
+      return newElementsToUpdate;
+    };
 
     // Pass 1: Mark text elements and connected arrows as deleted if their parent is deleted
     if (newlyDeletedIds.size > 0) {
-      newElementsToUpdate = newElementsToUpdate.map(el => {
+      const mutable = getOrCreateMutableElements();
+      newElementsToUpdate = mutable.map(el => {
         if (el.isDeleted) return el;
         
         // Delete bound text when its container is deleted
@@ -125,12 +134,13 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
       appState.newElement !== null;
 
     if (!isInteracting) {
-      const bindableShapes = newElementsToUpdate.filter(el => 
+      const sourceElements = newElementsToUpdate ?? excalidrawElements;
+      const bindableShapes = sourceElements.filter(el => 
         !el.isDeleted && 
         el.type !== "arrow" && el.type !== "text" && el.type !== "freedraw" && el.type !== "line"
       );
 
-      newElementsToUpdate = newElementsToUpdate.map(el => {
+      const mapped = sourceElements.map(el => {
         if (el.isDeleted || el.type !== "arrow") return el;
         
         const arrow = el as unknown as ExcalidrawArrowElement;
@@ -186,9 +196,13 @@ const ExcalidrawWrapper = React.memo(function ExcalidrawWrapper({
         
         return el;
       });
+
+      if (needsUpdate) {
+        newElementsToUpdate = mapped as ExcalidrawElement[];
+      }
     }
 
-    if (needsUpdate && apiRef.current) {
+    if (needsUpdate && apiRef.current && newElementsToUpdate) {
       // Update scene to mark relationships and text as deleted too
       apiRef.current.updateScene({ elements: newElementsToUpdate });
       return; // Wait for the subsequent onChange to update state
