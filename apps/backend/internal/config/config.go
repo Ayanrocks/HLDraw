@@ -8,6 +8,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Default configuration values used when environment variables are unset.
+const (
+	DefaultPort    = "8080"
+	DefaultDBHost  = "localhost"
+	DefaultDBPort  = "5432"
+	DefaultSSLMode = "disable"
+)
+
 // DatabaseConfig holds database connection parameters.
 type DatabaseConfig struct {
 	Host     string
@@ -56,29 +64,30 @@ func (c *Config) Validate() error {
 }
 
 // Load reads configuration from environment variables (.env file or system).
-// It fails fast with a fatal log if required DB credentials are missing.
-func Load() *Config {
+// Returns an error when required DB credentials are missing, letting the
+// caller decide how to handle the failure.
+func Load() (*Config, error) {
 	err := godotenv.Load()
 	if err != nil {
 		log.Warn().Msg("No .env file found, relying on system environment variables")
 	}
 
 	cfg := &Config{
-		Port: getEnvOrDefault("PORT", "8080"),
+		Port: getEnvOrDefault("PORT", DefaultPort),
 		DB: DatabaseConfig{
-			Host:     getEnvOrDefault("DB_HOST", "localhost"),
-			Port:     getEnvOrDefault("DB_PORT", "5432"),
+			Host:     getEnvOrDefault("DB_HOST", DefaultDBHost),
+			Port:     getEnvOrDefault("DB_PORT", DefaultDBPort),
 			User:     getEnvOrDefault("DB_USER", ""),
 			Password: getEnvOrDefault("DB_PASSWORD", ""),
 			DBName:   getEnvOrDefault("DB_NAME", ""),
-			SSLMode:  getEnvOrDefault("DB_SSLMODE", "disable"),
+			SSLMode:  getEnvOrDefault("DB_SSLMODE", DefaultSSLMode),
 		},
 		GinMode: os.Getenv("GIN_MODE"),
 	}
 
 	if err := cfg.Validate(); err != nil {
-		log.Fatal().Err(err).Msg("Invalid configuration — refusing to start with missing DB credentials")
+		return nil, err
 	}
 
-	return cfg
+	return cfg, nil
 }

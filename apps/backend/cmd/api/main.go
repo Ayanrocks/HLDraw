@@ -20,7 +20,10 @@ func main() {
 	log.Info().Msg("Starting hlDraw backend service...")
 
 	// Load configuration
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
 
 	// Initialize database
 	ctx := context.Background()

@@ -9,8 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// healthPingTimeout bounds the DB ping during a health check.
-const healthPingTimeout = 3 * time.Second
+// Health check constants.
+const (
+	healthPingTimeout = 3 * time.Second
+
+	healthStatusUp   = "up"
+	healthStatusDown = "down"
+	dbConnected      = "connected"
+	dbDisconnected   = "disconnected"
+	keyStatus        = "status"
+	keyDB            = "db"
+)
 
 // HealthHandler defines the interface for health check endpoints
 type HealthHandler interface {
@@ -35,16 +44,18 @@ func (h *healthHandler) Check(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), healthPingTimeout)
 	defer cancel()
 
-	dbStatus := "connected"
+	dbStatus := dbConnected
 	statusCode := http.StatusOK
+	healthStatus := healthStatusUp
 
 	if err := h.db.Ping(ctx); err != nil {
-		dbStatus = "disconnected"
+		dbStatus = dbDisconnected
 		statusCode = http.StatusServiceUnavailable
+		healthStatus = healthStatusDown
 	}
 
 	c.JSON(statusCode, gin.H{
-		"status": "up",
-		"db":     dbStatus,
+		keyStatus: healthStatus,
+		keyDB:     dbStatus,
 	})
 }
